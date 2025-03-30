@@ -4,7 +4,7 @@ We recommend using a high-performance CPU (e.g., Core i9-13900K) and
 enabling explicit CPU core binding to ensure 24 FPS for GelSight Mini.
 That is because GelSight Mini has a high resolution
 which requires high CPU resources and
-the scheduler may cause delays when launching multiple processes simultaneously.
+the OS scheduler may cause delays when launching multiple processes simultaneously.
 Therefore, if you are using GelSight Mini, we recommend executing the following steps to perform CPU core binding.
  1. Add config into `/etc/security/limits.conf` to ensure the user has the permission to set realtime priority.
     ```
