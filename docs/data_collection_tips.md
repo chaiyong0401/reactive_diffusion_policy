@@ -1,7 +1,7 @@
 ## (Important) Data Collection Tips
 ### 1. Pay Attention to Tactile / Force Feedback during Teleoperation
 Since RDP relies on tactile / force information for real-time responses, 
-the collected data have to include such reactive behaviour.
+the collected data have to include such reactive behavior based on tactile / force feedback.
 It is important to note that when data collectors become more proficient, 
 they may tend to rely only on visual cues and muscle memory to perform the task,
 which has to be avoided.
