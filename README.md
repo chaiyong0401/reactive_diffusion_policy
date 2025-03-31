@@ -15,7 +15,7 @@
     <br>
     <a href="https://www.gu-zhang.com">Gu Zhang</a><sup>234‡</sup>,
     Yuan Fang<sup>1†</sup>,
-    <a href="https://softrobotics.sjtu.edu.cn">Guoying Gu</a><sup>1‡</sup>,
+    <a href="https://softrobotics.sjtu.edu.cn">Guoying Gu</a>,
     <a href="http://hxu.rocks">Huazhe xu</a><sup>234‡</sup>,
     <a href="https://www.mvig.org">Cewu Lu</a><sup>1‡</sup>
     <br>
