@@ -45,7 +45,7 @@
 - [ ] Release the code of RDP. (ETA: April 6th)
 - [ ] Release the data. (ETA: April 9th)
 - [ ] Release the pretrained models. (ETA: April 9th)
-- [ ] Add guide for customized robots and tactile/force sensors.
+- [ ] Add guide for customized tactile/force sensors.
 - [ ] Add guide for collecting the tactile dataset.
 - [ ] Support single robot arm.
 - [ ] Support more robots (e.g. Franka).
