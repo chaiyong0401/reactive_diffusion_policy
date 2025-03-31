@@ -48,7 +48,7 @@
 - [ ] Add guide for collecting the tactile dataset.
 - [ ] Support single robot arm.
 - [ ] Support more robots (e.g. Franka).
-- [ ] Support 3D visual input.
+- [ ] Support 3D visual input in TactAR.
 - [ ] Add docker image for easy setup.
 
 ## ⚙️ Environment Setup
