@@ -157,6 +157,9 @@ After postprocessing, you may see the following structure:
 ## Q&A
 Please refer to [docs/Q&A.md](docs/Q&A.md).
 
+## 🙏 Acknowledgement
+Our work is built upon [Diffusion Policy](https://github.com/real-stanford/diffusion_policy). Thanks for their great work!
+
 ## 🔗 Citation
 If you find our work useful, please consider citing:
 ```
