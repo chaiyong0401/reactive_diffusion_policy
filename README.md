@@ -41,7 +41,7 @@
 </p>
 
 ## TODO
-- [x] Release the code of TactAR.
+- [x] Release the code of TactAR and [Quest3 APP](https://github.com/xiaoxiaoxh/TactAR_APP).
 - [ ] Release the code of RDP. (ETA: April 6th)
 - [ ] Release the data. (ETA: April 9th)
 - [ ] Release the pretrained models. (ETA: April 9th)
