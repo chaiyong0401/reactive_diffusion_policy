@@ -13,7 +13,7 @@
     Jieji Ren<sup>1*</sup>,
     <a href="https://wendichen.me">Wendi Chen</a><sup>1*</sup>,
     <br>
-    <a href="https://www.gu-zhang.com">Gu Zhang</a><sup>234‡</sup>,
+    <a href="https://www.gu-zhang.com">Gu Zhang</a><sup>234†</sup>,
     Yuan Fang<sup>1†</sup>,
     <a href="https://softrobotics.sjtu.edu.cn">Guoying Gu</a>,
     <a href="http://hxu.rocks">Huazhe xu</a><sup>234‡</sup>,
