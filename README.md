@@ -59,7 +59,7 @@
       ensure 24 FPS tactile sensing.
 - 2 robot arms with (optional) joint torque sensors.
     > We use [Flexiv Rizon 4](https://www.flexiv.com/products/rizon) with the [GRAV](https://www.flexiv.com/products/grav) gripper by default and 
-      will support single robot and other robots soon.
+      will support single-arm robot and other robots soon.
 - 1-3 [RealSense](https://www.intelrealsense.com) cameras.
     > We use D435 for wrist camera and D415 for external cameras.
       Follow the [official document](https://dev.intelrealsense.com/docs/compiling-librealsense-for-linux-ubuntu-guide) to install librealsense2. 
