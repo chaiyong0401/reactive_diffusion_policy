@@ -74,7 +74,6 @@ class RealRobotEnvironment(Node):
                  gripper_control_width_precision: float = 0.02,
                  gripper_width_threshold: float = 0.04,
                  enable_gripper_width_clipping: bool = True,
-                 enable_wrench_recording: bool = False,
                  enable_exp_recording: bool = False,
                  output_dir: Optional[str] = None,
                  vcamera_server_ip: Optional[str] = None,
@@ -105,11 +104,6 @@ class RealRobotEnvironment(Node):
         self.obs_buffer = RingBuffer(size=1024, fps=max_fps)
 
         self.mutex = threading.Lock()
-
-        self.enable_wrench_recording = enable_wrench_recording
-        if self.enable_wrench_recording:
-            assert output_dir is not None, "output_dir must be provided for wrench recording"
-        self.wrench_list = []
 
         self.enable_exp_recording = enable_exp_recording
         if self.enable_exp_recording:
@@ -195,7 +189,7 @@ class RealRobotEnvironment(Node):
             logger.debug(f"Subscribed to topic: {name} with type: {msg_type}")
 
         # ApproximateTimeSynchronizer is used to synchronize multiple topics
-        self.ts = ApproximateTimeSynchronizer(self.subscribers, queue_size=40, slop=0.1,
+        self.ts = ApproximateTimeSynchronizer(self.subscribers, queue_size=40, slop=0.4,
                                               allow_headerless=False)
 
         self.ts.registerCallback(self.callback)
@@ -258,16 +252,6 @@ class RealRobotEnvironment(Node):
         raw_obs_dict = self.data_processing_manager.convert_sensor_msg_to_obs_dict(sensor_msg)
 
         self.obs_buffer.push(raw_obs_dict)
-
-        # record wrench data
-        if self.enable_wrench_recording:
-            recorded_wrench = {
-                "leftRobotTCPWrench": deepcopy(sensor_msg.leftRobotTCPWrench),
-                "rightRobotTCPWrench": deepcopy(sensor_msg.rightRobotTCPWrench),
-            }
-
-            with self.mutex:
-                self.wrench_list.append(recorded_wrench)
 
         # record experiment data
         if self.enable_exp_recording:
@@ -341,8 +325,6 @@ class RealRobotEnvironment(Node):
     def reset(self) -> None:
         self.start_gripper_interval_control = False
         self.obs_buffer.reset()
-        if self.enable_wrench_recording:
-            self.wrench_list = []
         if self.enable_exp_recording:
             self.sensor_msg_list.sensorMessages = []
             self.predicted_full_tcp_action_buffer.reset()
@@ -529,18 +511,6 @@ class RealRobotEnvironment(Node):
                 raise ValueError(f"Unknown action type: {type}")
 
     def save_exp(self, episode_idx):
-        if self.enable_wrench_recording:
-            logger.debug('Trying to save wrench messages...')
-            if not osp.exists(self.exp_dir):
-                os.makedirs(self.exp_dir)
-            record_path = osp.join(self.exp_dir, f'episode_{episode_idx}_wrench.pkl')
-            if osp.exists(record_path):
-                record_path = ".".join(record_path.split('.')[:-1]) + f'{time.strftime("_%Y%m%d_%H%M%S")}.pkl'
-                logger.warning(f'Wrench path already exists, save to {record_path}')
-            with open(record_path, 'wb') as f:
-                with self.mutex:
-                    pickle.dump(self.wrench_list, f)
-            logger.debug(f'Saved wrench record to {record_path}')
         if self.enable_exp_recording:
             logger.debug('Trying to save sensor messages...')
             if not osp.exists(self.exp_dir):

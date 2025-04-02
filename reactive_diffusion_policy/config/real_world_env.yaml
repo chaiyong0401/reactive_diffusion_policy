@@ -1,2 +1,2 @@
 defaults:
-  - task: peeling_two_realsense_one_gelsight_one_mctac_24fps
+  - task: real_peel_two_realsense_one_gelsight_one_mctac_24fps

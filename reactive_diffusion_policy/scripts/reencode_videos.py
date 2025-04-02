@@ -39,5 +39,5 @@ def replace_with_reencoded_mp4(directory):
         print(f"Reencoded and replaced: {input_file}")
 
 if __name__ == "__main__":
-    directory = "/home/xuehan/Videos/Bimanual-tactile/whiteboard_sweep_v1/diffusion_tactile_vq_rnn"  # Replace with your directory path
+    directory = ""  # Replace with your directory path
     replace_with_reencoded_mp4(directory)

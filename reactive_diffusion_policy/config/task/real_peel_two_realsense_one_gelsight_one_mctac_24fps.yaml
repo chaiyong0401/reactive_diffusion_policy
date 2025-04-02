@@ -19,8 +19,8 @@ publisher:
   # two realsense cameras
   realsense_camera_publisher: 
     - camera_serial_number: '036422060422'
-      camera_type: 'D400'  
-      camera_name: 'external_camera' 
+      camera_type: 'D400'
+      camera_name: 'external_camera'
       rgb_resolution: [640, 480]
       depth_resolution: [640, 480]
       random_sample_point_num: 3000

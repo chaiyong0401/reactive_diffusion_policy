@@ -16,7 +16,7 @@
     <a href="https://www.gu-zhang.com">Gu Zhang</a><sup>234†</sup>,
     Yuan Fang<sup>1†</sup>,
     <a href="https://softrobotics.sjtu.edu.cn">Guoying Gu</a>,
-    <a href="http://hxu.rocks">Huazhe xu</a><sup>234‡</sup>,
+    <a href="http://hxu.rocks">Huazhe Xu</a><sup>234‡</sup>,
     <a href="https://www.mvig.org">Cewu Lu</a><sup>1‡</sup>
     <br>
     <sup>1</sup>Shanghai Jiao Tong University
@@ -42,7 +42,7 @@
 
 ## TODO
 - [x] Release the code of TactAR and [Quest3 APP](https://github.com/xiaoxiaoxh/TactAR_APP).
-- [ ] Release the code of RDP. (ETA: April 6th)
+- [x] Release the code of RDP.
 - [ ] Release the data. (ETA: April 9th)
 - [ ] Release the pretrained models. (ETA: April 9th)
 - [ ] Add guide for customized tactile/force sensors.
@@ -82,6 +82,9 @@ to install ROS2 Humble.
    pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
    pip install -r requirements.txt
    ```
+3. (Optional) Follow [third_party/mvsdk/README.md](third_party/mvsdk/README.md)
+   to install MindVision SDK. This package is needed only if you want to
+   record experiment videos with MindVision cameras.
 
 ## 📦 Data Collection
 ### TactAR Setup
@@ -97,10 +100,11 @@ then start several services for teleoperating robots, publishing sensor data and
           Edit [reactive_diffusion_policy/config/task/real_robot_env.yaml](reactive_diffusion_policy/config/task/real_robot_env.yaml)
           to configure the environment settings including `host_ip`, `robot_ip`, `vr_server_ip` and `calibration_path`.
         - **Task Configuration.**
-          Create task configuration file which assigns the camera and sensor to use.
-          You can take [reactive_diffusion_policy/config/task/peeling_two_realsense_one_gelsight_one_mctac_24fps.yaml](reactive_diffusion_policy/config/task/peeling_two_realsense_one_gelsight_one_mctac_24fps.yaml)
+          Create task config file which assigns the camera and sensor to use.
+          You can take [reactive_diffusion_policy/config/task/real_peel_two_realsense_one_gelsight_one_mctac_24fps.yaml](reactive_diffusion_policy/config/task/real_peel_two_realsense_one_gelsight_one_mctac_24fps.yaml)
           as an example.
-   2. Start services.
+   2. Start services. Run each command in a separate terminal.
+      You can use tmux to split the terminal.
       ```bash
       # start teleoperation server
       python teleop.py task=[task_config_file_name]
@@ -151,11 +155,57 @@ After postprocessing, you may see the following structure:
  └── timestamp (25710,) float32
 ```
 
+## 📚 Training
+1. **Task Configuration.**
+   In addition to the task config file used in [data collection](#data-collection),
+   another file is needed to configure dataset, runner, and model-related parameters such as `obs` and `action`.
+   You can take [reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml](reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml) as an example.
+2. **Generate Dataset with Correct Frequency.**
+   The `fps` at the end of config file name indicates the control frequency.
+   Make sure the `control_fps` in the task config file is consistent with dataset.
+   For instance, we record 24fps data and want to train a model with 12fps control frequency,
+   then we have to modify the `TEMPORAL_DOWNSAMPLE_RATIO` in [post_process_data.py](post_process_data.py)
+   to 2 to generate the correct dataset.
+3.**Run the Training Script.**
+   We provide training scripts for Diffusion Policy and Reactive Diffusion Policy.
+   You can modify the training script to train the desired task and model.
+   ```bash
+   # config multi-gpu training
+   accelerate config
+   # Diffusion Policy
+   ./train_dp.sh
+   # Reactive Diffusion Policy
+   ./train_rdp.sh
+   ```
+
+## 🚀 Inference
+1. (Optional) Refer to `vcamera_server_ip` and `vcamera_server_port` in the task config file and start the corresponding vcamera server
+   ```bash
+   # run vcamera server
+   python vcamera_server.py --host_ip [host_ip] --port [port] --camera_id [camera_id]
+   ```
+2. Modify [eval.sh](eval.sh) to set the task and model you want to evaluate
+   and run the command in separate terminals.
+   ```bash
+   # start teleoperation server
+   python teleop.py task=[task_config_file_name]
+   # start camera node launcher
+   python camera_node_launcher.py task=[task_config_file_name]
+   # start inference
+   ./eval.sh
+   ```
+
 ## Q&A
 Please refer to [docs/Q&A.md](docs/Q&A.md).
 
 ## 🙏 Acknowledgement
-Our work is built upon [Diffusion Policy](https://github.com/real-stanford/diffusion_policy). Thanks for their great work!
+Our work is built upon
+[Diffusion Policy](https://github.com/real-stanford/diffusion_policy),
+[VQ-BeT](https://github.com/jayLEE0301/vq_bet_official),
+[Stable Diffusion](https://github.com/CompVis/stable-diffusion),
+[UMI](https://github.com/real-stanford/universal_manipulation_interface)
+and [Data Scaling Laws](https://github.com/Fanqi-Lin/Data-Scaling-Laws).
+Thanks for their great work!
 
 ## 🔗 Citation
 If you find our work useful, please consider citing:

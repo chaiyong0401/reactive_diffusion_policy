@@ -24,7 +24,7 @@ def flatten_data(data: np.ndarray):
 TRANSFORM_MATRIX_PATH = 'data/PCA_Transform_McTAC_v1/pca_transform_matrix.npy'
 MEAN_MATRIX_PATH = 'data/PCA_Transform_McTAC_v1/pca_mean_matrix.npy'
 TRAIN_TACTILE_DATA_PATH = 'data/marker_motion/mctac_v1.zarr'
-EVAL_TACTILE_DATA_PATH = 'data/whiteboard_v3_zarr/replay_buffer.zarr'
+EVAL_TACTILE_DATA_PATH = 'data/peel_v3_zarr/replay_buffer.zarr'
 MODE = 'Train'
 
 def main():
