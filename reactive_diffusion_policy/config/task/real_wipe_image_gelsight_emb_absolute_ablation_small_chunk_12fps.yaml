@@ -2,7 +2,7 @@ defaults:
   - real_wipe_two_realsense_one_gelsight_one_mctac_24fps@_here_
   - _self_
 
-name: real_wipe_image_gelsight_emb_absolute_small_chunk_12fps
+name: real_wipe_image_gelsight_emb_absolute_ablation_small_chunk_12fps
 
 image_shape: [3, 240, 320]
 dataset_path: data/wipe_v1_zarr
