@@ -45,7 +45,7 @@
 - [x] Release the code of RDP.
 - [ ] Release the data. (ETA: April 9th)
 - [ ] Release the pretrained models. (ETA: April 9th)
-- [ ] Add guide for customized tactile/force sensors.
+- [ ] Add guide for customized tactile/force sensors and customized tasks.
 - [ ] Add guide for collecting the tactile dataset.
 - [ ] Support more robots (e.g. Franka).
 
@@ -166,7 +166,7 @@ After postprocessing, you may see the following structure:
    For instance, we record 24fps data and want to train a model with 12fps control frequency,
    then we have to modify the `TEMPORAL_DOWNSAMPLE_RATIO` in [post_process_data.py](post_process_data.py)
    to 2 to generate the correct dataset.
-3.**Run the Training Script.**
+3. **Run the Training Script.**
    We provide training scripts for Diffusion Policy and Reactive Diffusion Policy.
    You can modify the training script to train the desired task and model.
    ```bash
