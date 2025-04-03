@@ -34,6 +34,7 @@
 <a href='https://arxiv.org/abs/2503.02881'><img alt='arXiv' src='https://img.shields.io/badge/arXiv-2503.02881-red.svg'></a> &nbsp;&nbsp;&nbsp;&nbsp;
 <a href='https://reactive-diffusion-policy.github.io'><img alt='project website' src='https://img.shields.io/website-up-down-green-red/http/cv.lbesson.qc.to.svg'></a> &nbsp;&nbsp;&nbsp;&nbsp;
 <a href='https://huggingface.co/datasets/WendiChen/reactive_diffusion_policy_dataset'><img alt='data' src='https://img.shields.io/badge/data-FFD21E?logo=huggingface&logoColor=000'></a> &nbsp;&nbsp;&nbsp;&nbsp;
+<a href='https://huggingface.co/WendiChen/reactive_diffusion_policy_model'><img alt='checkpoints' src='https://img.shields.io/badge/checkpoints-FFD21E?logo=huggingface&logoColor=000'></a> &nbsp;&nbsp;&nbsp;&nbsp;
 <img alt='powered by Pytorch' src='https://img.shields.io/badge/PyTorch-❤️-F8C6B5?logo=pytorch&logoColor=white'> &nbsp;&nbsp;&nbsp;&nbsp;
 </div>
 
@@ -45,7 +46,7 @@
 - [x] Release the code of TactAR and [Quest3 APP](https://github.com/xiaoxiaoxh/TactAR_APP).
 - [x] Release the code of RDP.
 - [x] Release the data.
-- [ ] Release the pretrained models. (ETA: April 5th)
+- [x] Release the checkpoints.
 - [ ] Add guide for customized tactile/force sensors and customized tasks. (ETA: April 8th)
 - [ ] Add guide for collecting the tactile dataset. (ETA: April 8th)
 - [ ] Support more robots (e.g. Franka).
@@ -202,6 +203,10 @@ After postprocessing, you may see the following structure:
    # start inference
    ./eval.sh
    ```
+
+### Checkpoints
+We provide the checkpoints in our experiments
+on [![checkpoints](https://img.shields.io/badge/checkpoints-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/WendiChen/reactive_diffusion_policy_model).
 
 ## Q&A
 Please refer to [docs/Q&A.md](docs/Q&A.md).
