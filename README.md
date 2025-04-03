@@ -164,12 +164,16 @@ After postprocessing, you may see the following structure:
    In addition to the task config file used in [data collection](#data-collection),
    another file is needed to configure dataset, runner, and model-related parameters such as `obs` and `action`.
    You can take [reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml](reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml) as an example.
+   > The `at` and `ldp` in the config file name indicate the Asymmetric Tokenizer and Latent Diffusion Policy.
+     Other config files are for Diffusion Policy.
 2. **Generate Dataset with Correct Frequency.**
    The `fps` at the end of config file name indicates the control frequency.
    Make sure the `control_fps` in the task config file is consistent with dataset.
    For instance, we record 24fps data and want to train a model with 12fps control frequency,
    then we have to modify the `TEMPORAL_DOWNSAMPLE_RATIO` in [post_process_data.py](post_process_data.py)
    to 2 to generate the correct dataset.
+   > We record 24fps data for experiments. 
+     We train DP with 12fps control frequency and RDP (AT + LDP) with 24fps control frequency.
 3. **Run the Training Script.**
    We provide training scripts for Diffusion Policy and Reactive Diffusion Policy.
    You can modify the training script to train the desired task and model.
