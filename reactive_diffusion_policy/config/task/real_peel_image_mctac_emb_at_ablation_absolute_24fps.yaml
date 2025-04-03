@@ -2,7 +2,7 @@ defaults:
   - real_peel_two_realsense_one_gelsight_one_mctac_24fps@_here_
   - _self_
 
-name: real_peel_image_mctac_emb_at_absolute_24fps
+name: real_peel_image_mctac_emb_at_ablation_absolute_24fps
 
 image_shape: [3, 240, 320]
 dataset_path: data/peel_v1_zarr
