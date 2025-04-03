@@ -33,7 +33,7 @@
 <div align="center">
 <a href='https://arxiv.org/abs/2503.02881'><img alt='arXiv' src='https://img.shields.io/badge/arXiv-2503.02881-red.svg'></a> &nbsp;&nbsp;&nbsp;&nbsp;
 <a href='https://reactive-diffusion-policy.github.io'><img alt='project website' src='https://img.shields.io/website-up-down-green-red/http/cv.lbesson.qc.to.svg'></a> &nbsp;&nbsp;&nbsp;&nbsp;
-<a href='https://huggingface.co/datasets/WendiChen/reactive_diffusion_policy_dataset'><img alt='Data' src='https://img.shields.io/badge/Data-FFD21E?logo=huggingface&logoColor=000'></a> &nbsp;&nbsp;&nbsp;&nbsp;
+<a href='https://huggingface.co/datasets/WendiChen/reactive_diffusion_policy_dataset'><img alt='data' src='https://img.shields.io/badge/data-FFD21E?logo=huggingface&logoColor=000'></a> &nbsp;&nbsp;&nbsp;&nbsp;
 <img alt='powered by Pytorch' src='https://img.shields.io/badge/PyTorch-❤️-F8C6B5?logo=pytorch&logoColor=white'> &nbsp;&nbsp;&nbsp;&nbsp;
 </div>
 
@@ -122,7 +122,7 @@ to run the TactAR APP.
 Please refer to [docs/data_collection_tips.md](docs/data_collection_tips.md).
 
 ### Example Data
-We provide the data we collected on [![Data](https://img.shields.io/badge/Data-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/datasets/WendiChen/reactive_diffusion_policy_dataset).
+We provide the data we collected on [![data](https://img.shields.io/badge/data-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/datasets/WendiChen/reactive_diffusion_policy_dataset).
 
 ### Data Postprocessing
 Change the config in [post_process_data.py](post_process_data.py)
