@@ -45,9 +45,9 @@
 - [x] Release the code of TactAR and [Quest3 APP](https://github.com/xiaoxiaoxh/TactAR_APP).
 - [x] Release the code of RDP.
 - [x] Release the data.
-- [ ] Release the pretrained models. (ETA: April 9th)
-- [ ] Add guide for customized tactile/force sensors and customized tasks.
-- [ ] Add guide for collecting the tactile dataset.
+- [ ] Release the pretrained models. (ETA: April 5th)
+- [ ] Add guide for customized tactile/force sensors and customized tasks. (ETA: April 8th)
+- [ ] Add guide for collecting the tactile dataset. (ETA: April 8th)
 - [ ] Support more robots (e.g. Franka).
 
 ## ⚙️ Environment Setup
