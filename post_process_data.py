@@ -260,13 +260,6 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError
 
-    if EXTRACT_IMAGES:
-        # extract external images to directory
-        for i in range(external_img_arrays.shape[0]):
-            img_path = os.path.join(img_save_dir, f'external_img_{i:03}.png')
-            cv2.imwrite(img_path, external_img_arrays[i])
-
-
     # If no filtering, just rename
     valid_mask = np.ones(len(action_arrays), dtype=bool)
 
