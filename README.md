@@ -164,9 +164,8 @@ After postprocessing, you may see the following structure:
 1. **Task Configuration.**
    In addition to the task config file used in [data collection](#data-collection),
    another file is needed to configure dataset, runner, and model-related parameters such as `obs` and `action`.
-   You can take [reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml](reactive_diffusion_policy/config/task/real_peel_image_absolute_12fps.yaml) as an example.
-   > The `at` and `ldp` in the config file name indicate the Asymmetric Tokenizer and Latent Diffusion Policy.
-     Other config files are for Diffusion Policy.
+   You can take [reactive_diffusion_policy/config/task/real_peel_image_dp_absolute_12fps.yaml](reactive_diffusion_policy/config/task/real_peel_image_dp_absolute_12fps.yaml) as an example.
+   > The `dp`, `at` and `ldp` in the config file name indicate the Diffusion policy, Asymmetric Tokenizer and Latent Diffusion Policy.
 2. **Generate Dataset with Correct Frequency.**
    The `fps` at the end of config file name indicates the control frequency.
    Make sure the `control_fps` in the task config file is consistent with dataset.

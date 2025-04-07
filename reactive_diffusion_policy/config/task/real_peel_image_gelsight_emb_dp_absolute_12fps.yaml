@@ -1,11 +1,11 @@
 defaults:
-  - real_wipe_two_realsense_one_gelsight_one_mctac_24fps@_here_
+  - real_peel_two_realsense_one_gelsight_one_mctac_24fps@_here_
   - _self_
 
-name: real_wipe_image_absolute_12fps
+name: real_peel_image_gelsight_emb_dp_absolute_12fps
 
 image_shape: [3, 240, 320]
-dataset_path: data/wipe_v1_zarr
+dataset_path: data/peel_v1_zarr
 
 shape_meta: &shape_meta
   # acceptable types: rgb, low_dim
@@ -14,28 +14,31 @@ shape_meta: &shape_meta
       shape: ${task.image_shape}
       type: rgb
     left_robot_tcp_pose:
-      shape: [9]
+      shape: [3]
       type: low_dim
     left_robot_gripper_width:
       shape: [1]
       type: low_dim
+    left_gripper1_marker_offset_emb:
+      shape: [ 15 ]  # the raw dimension is (63*2), we use PCA to reduce the dimension to 15
+      type: low_dim
   action:
-    shape: [10] # (3+6+1) (x, y, z, 6d rotation, gripper_width)
+    shape: [4] # (3+6+1) (x, y, z, 6d rotation, gripper_width)
 
 env_runner:
   _target_: reactive_diffusion_policy.env_runner.real_runner.RealRunner
   eval_episodes: 10
-  max_duration_time: 35
+  max_duration_time: 30
   tcp_action_update_interval: 8
   gripper_action_update_interval: 8
   tcp_pos_clip_range: # no clip for x, y, clip for z
-    - [ -100, -100, 0.04 ]
+    - [ -100, -100, 0.13 ]
     - [ 100, 100, 1.0 ]
   tcp_rot_clip_range: # no clip
-    - [ -100, -100, -100 ]
-    - [ 100, 100, 100 ]
+    - [ -3.14159, 0.0, 3.14159 ]
+    - [ -3.14159, 0.0, 3.14159 ]
   latency_step: 2
-  gripper_latency_step: 4
+  gripper_latency_step: 2
   control_fps: 12
   inference_fps: 6
   n_obs_steps: ${n_obs_steps}

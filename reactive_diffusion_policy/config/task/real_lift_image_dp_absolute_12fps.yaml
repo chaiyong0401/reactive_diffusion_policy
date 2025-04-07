@@ -1,16 +1,22 @@
 defaults:
-  - real_peel_two_realsense_one_gelsight_one_mctac_24fps@_here_
+  - real_lift_three_realsense_one_mctac_one_gelsight_24fps@_here_
   - _self_
 
-name: real_peel_image_absolute_12fps
+name: real_lift_image_dp_absolute_12fps
 
 image_shape: [3, 240, 320]
-dataset_path: data/peel_v1_zarr
+dataset_path: data/lift_v1_zarr
 
 shape_meta: &shape_meta
   # acceptable types: rgb, low_dim
   obs:
+    external_img:
+      shape: ${task.image_shape}
+      type: rgb
     left_wrist_img:
+      shape: ${task.image_shape}
+      type: rgb
+    right_wrist_img:
       shape: ${task.image_shape}
       type: rgb
     left_robot_tcp_pose:
@@ -19,21 +25,31 @@ shape_meta: &shape_meta
     left_robot_gripper_width:
       shape: [1]
       type: low_dim
+    right_robot_tcp_pose:
+      shape: [3]
+      type: low_dim
+    right_robot_gripper_width:
+      shape: [1]
+      type: low_dim
   action:
-    shape: [4] # (3+6+1) (x, y, z, 6d rotation, gripper_width)
+    shape: [8] # (4 + 4) (x_l, y_l, z_l, x_r, y_r, z_r, gripper_width_l, gripper_width_r)
 
 env_runner:
   _target_: reactive_diffusion_policy.env_runner.real_runner.RealRunner
   eval_episodes: 10
-  max_duration_time: 24
+  max_duration_time: 40
   tcp_action_update_interval: 8
   gripper_action_update_interval: 8
   tcp_pos_clip_range: # no clip for x, y, clip for z
     - [ -100, -100, 0.13 ]
     - [ 100, 100, 1.0 ]
+    - [ -100, -100, 0.13 ]
+    - [ 100, 100, 1.0 ]
   tcp_rot_clip_range: # no clip
-    - [ -3.14159, 0.0, 3.14159 ]
-    - [ -3.14159, 0.0, 3.14159 ]
+    - [ -1.570795, 0.0, 3.14159 ]
+    - [ -1.570795, 0.0, 3.14159 ]
+    - [ 1.570795, 0.0, 3.14159 ]
+    - [ 1.570795, 0.0, 3.14159 ]
   latency_step: 2
   gripper_latency_step: 2
   control_fps: 12
@@ -52,10 +68,8 @@ env_runner:
   enable_video_recording: True
   vcamera_server_ip:
     - 192.168.2.252
-    - 192.168.2.252
   vcamera_server_port:
     - 8102
-    - 8112
   env_params:
     robot_server_ip: ${task.robot_server.host_ip}
     robot_server_port: ${task.robot_server.port}
@@ -63,7 +77,7 @@ env_runner:
     device_mapping_server_port: ${task.device_mapping_server.port}
     data_processing_params:
       # TODO: fix this (support left or right)
-      mode: 'single_arm_two_realsense_two_tactile'
+      mode: 'dual_arm_two_realsense_four_tactile'
       pca_param_dict:
         GelSight:
           n_components: 15
@@ -91,7 +105,7 @@ env_runner:
     grasp_force: ${task.teleop_server.grasp_force}
     gripper_control_time_interval: ${task.teleop_server.gripper_control_time_interval}
     gripper_control_width_precision: ${task.teleop_server.gripper_control_width_precision}
-    gripper_width_threshold: 0.046
+    gripper_width_threshold: 0.05
     enable_gripper_width_clipping: True
 
 dataset:
