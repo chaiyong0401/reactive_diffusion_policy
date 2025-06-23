@@ -130,9 +130,9 @@ class TrainATWorkspace(BaseWorkspace):
                 train_losses = list()
                 with tqdm.tqdm(train_dataloader, desc=f"Training epoch {self.epoch}",
                                leave=False, mininterval=cfg.training.tqdm_interval_sec) as tepoch:
-                    for batch_idx, batch in enumerate(tepoch):
+                    for batch_idx, batch in enumerate(tepoch):  # BaseImageDataset 기반 custom image dataset 
                         # device transfer
-                        batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                        batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True)) # tensor를 gpu로 옮김
                         if train_sampling_batch is None:
                             train_sampling_batch = batch
                         # compute loss

@@ -23,13 +23,19 @@ class UsbCameraInfo(BaseModel):
     device_id: int
     type: str
 
+class GoproCameraInfo(BaseModel):
+    topic_image: str
+    device_id: str
+    type: str
+
 class DeviceToTopic(BaseModel):
     realsense: Dict[str, RealsenseCameraInfo] = {}
     usb: Dict[str, UsbCameraInfo] = {}
+    gopro: Dict[str, GoproCameraInfo] = {}
 
 class DeviceMappingServer:
     """Server class that defines the device mapping (device to ROS topic name)"""
-    def __init__(self, publisher_cfg: DictConfig, host_ip: str = '127.0.0.1', port: int = 8062):
+    def __init__(self, publisher_cfg: DictConfig, host_ip: str = '10.112.2.37', port: int = 8062):
         self.host_ip = host_ip
         self.port = port
 
@@ -64,8 +70,9 @@ class DeviceMappingServer:
                 The device id of the usb camera is
                 the index in its first device path
                 '''
-                if (current_camera_name and ('USB camera' in current_camera_name or 'GelSight' in current_camera_name)
+                if (current_camera_name and ('USB camera' in current_camera_name or 'GelSight' in current_camera_name or 'DIGIT' in current_camera_name)
                         and '/dev/video' in line and not found_video_path):
+                    print("current_camera_name: ", current_camera_name)
                     device_id = line.split('/')[-1]
                     camera_ids.append(int(device_id.replace('video', '')))
                     found_video_path = True
@@ -96,6 +103,17 @@ class DeviceMappingServer:
                             type="realsense"
                         )
                         break
+        
+        # gopro camera
+        if publisher_cfg.gopro_camera_publisher is not None:
+            for gopro_cam in publisher_cfg.gopro_camera_publisher:
+                print("gopro_cam.camera_name: ", gopro_cam.camera_name)
+                self.device_to_topic_mapping.gopro[gopro_cam.camera_name] = GoproCameraInfo(
+                    topic_image=f"{gopro_cam.camera_name}/color/image_raw",
+                    device_id=gopro_cam.camera_serial_number,
+                    type="gopro"
+                )
+    
 
         # usb camera
         # Here we suppose the usb cameras are in sequence

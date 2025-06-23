@@ -1,10 +1,12 @@
 defaults:
-  - task: real_peel_image_gelsight_emb_ldp_24fps
+  # - task: real_peel_image_gelsight_emb_ldp_24fps
+  - task: real_umi_image_xela_wrench_ldp_24fps
   - at: at_peel
   - _self_
 
 name: train_latent_diffusion_unet_image
 _target_: reactive_diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
+# _target_: reactive_diffusion_policy.workspace.eval_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
@@ -49,7 +51,8 @@ policy:
       _target_: reactive_diffusion_policy.model.vision.model_getter.get_resnet
       name: resnet18
       weights: null
-    resize_shape: [240, 320]
+    # resize_shape: [240, 320]
+    resize_shape: [224, 224]
     random_transforms:
       - type: RandomCrop
         ratio: 0.90

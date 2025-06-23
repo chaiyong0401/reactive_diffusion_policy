@@ -51,6 +51,7 @@ class DataPostProcessingManager:
         obs_dict['right_robot_gripper_force'] = sensor_msg.rightRobotGripperState[1][np.newaxis]
 
         if self.use_6d_rotation:
+            # logger.debug(f"pose_6d before using pose_6d_to_pose_9d {sensor_msg.leftRobotTCP}")
             obs_dict['left_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.leftRobotTCP)
             obs_dict['right_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.rightRobotTCP)
 

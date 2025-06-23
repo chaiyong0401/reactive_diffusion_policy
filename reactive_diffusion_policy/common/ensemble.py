@@ -67,19 +67,19 @@ class EnsembleBuffer:
         Get ensembled action from buffer.
         """
         if self.timestep - self.actions_start_timestep >= len(self.actions):
-            return None      # no data
+            return None      # no data, 실행할 수 있는 action이 없음(현재 timestep 보다 늦게 들어온 action이 없으면)
         while self.actions_start_timestep < self.timestep:
-            self.actions.popleft()
+            self.actions.popleft()         # buffer에서 오래된 action을 제거하면서 actions_stat_timestep을 self.timestep까지 증가 
             self.actions_timestep.popleft()
             self.actions_start_timestep += 1
         actions = self.actions[0]
         actions_timestep = self.actions_timestep[0]
         if actions == []:
             return None      # no data
-        sorted_actions = sorted(zip(actions_timestep, actions))
+        sorted_actions = sorted(zip(actions_timestep, actions)) # action들을 action_timestep 기준으로 정렬
         all_actions = np.array([x for _, x in sorted_actions])
         all_timesteps = np.array([t for t, _ in sorted_actions])
-        if self.mode == "new":
+        if self.mode == "new":  # 가장 최근에 들어온 action(default)
             action = all_actions[-1]
         elif self.mode == "old":
             action = all_actions[0]

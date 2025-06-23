@@ -28,8 +28,8 @@ MCTAC_PCA_PATH = 'data/PCA_Transform_McTAC_v1'
 PCA_DIM = 15
 
 if __name__ == '__main__':
-    data_dir = f'/home/wendi/Desktop/record_data/{TAG}'
-    save_data_dir = f'/home/wendi/Desktop/record_data/{TAG}_downsample{TEMPORAL_DOWNSAMPLE_RATIO}{"_debug" if DEBUG else ""}_zarr'
+    data_dir = f'/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/reactive_diffusion_policy_dataset/dataset_mini/{TAG}'
+    save_data_dir = f'/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/reactive_diffusion_policy_dataset/dataset_mini/{TAG}_downsample{TEMPORAL_DOWNSAMPLE_RATIO}{"_debug" if DEBUG else ""}_zarr'
     save_data_path = osp.join(osp.join(osp.abspath(os.getcwd()), save_data_dir, f'replay_buffer.zarr'))
     os.makedirs(save_data_dir, exist_ok=True)
     if os.path.exists(save_data_path):
@@ -409,7 +409,9 @@ if __name__ == '__main__':
                              compressor=compressor)
     zarr_data.create_dataset('left_robot_tcp_vel', data=left_robot_tcp_vel_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
                                 compressor=compressor)
-    zarr_data.create_dataset('left_robot_tcp_wrench', data=left_robot_tcp_wrench_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
+    # zarr_data.create_dataset('left_robot_tcp_wrench', data=left_robot_tcp_wrench_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
+    #                             compressor=compressor)
+    zarr_data.create_dataset('left_robot_tcp_wrench', data=left_robot_tcp_wrench_arrays, chunks=(10000, 16), dtype='float32', overwrite=True,
                                 compressor=compressor)
     zarr_data.create_dataset('left_robot_gripper_width', data=left_robot_gripper_width_arrays, chunks=(10000, 1), dtype='float32', overwrite=True,
                                 compressor=compressor)
@@ -419,7 +421,9 @@ if __name__ == '__main__':
                                 compressor=compressor)
     zarr_data.create_dataset('right_robot_tcp_vel', data=right_robot_tcp_vel_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
                                 compressor=compressor)
-    zarr_data.create_dataset('right_robot_tcp_wrench', data=right_robot_tcp_wrench_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
+    # zarr_data.create_dataset('right_robot_tcp_wrench', data=right_robot_tcp_wrench_arrays, chunks=(10000, 6), dtype='float32', overwrite=True,
+    #                             compressor=compressor)
+    zarr_data.create_dataset('right_robot_tcp_wrench', data=right_robot_tcp_wrench_arrays, chunks=(10000, 16), dtype='float32', overwrite=True,
                                 compressor=compressor)
     zarr_data.create_dataset('right_robot_gripper_width', data=right_robot_gripper_width_arrays, chunks=(10000, 1), dtype='float32', overwrite=True,
                                 compressor=compressor)

@@ -5,9 +5,8 @@ flexivrdk_root_path = os.path.join(current_path, '../', '../', '../', 'third_par
 print(flexivrdk_root_path)
 import sys
 sys.path.insert(0, flexivrdk_root_path+"/lib_py")
-import flexivrdk
 sys.path.insert(0, flexivrdk_root_path+"/example_py")
-
+import flexivrdk
 import time
 from typing import List
 from loguru import logger
@@ -23,7 +22,7 @@ class FlexivController():
         try:
             self.robot_states = flexivrdk.RobotStates()
             self.gripper_states = flexivrdk.GripperStates()
-            self.log = flexivrdk.Log()
+            # self.log = flexivrdk.Log()
             self.mode = flexivrdk.Mode
             self.robot = flexivrdk.Robot(robot_ip, local_ip)
             self.gripper = flexivrdk.Gripper(self.robot)

@@ -20,7 +20,8 @@ import open3d as o3d
 
 from reactive_diffusion_policy.common.data_models import TactileSensorMessage, Arrow
 from reactive_diffusion_policy.common.tactile_marker_utils import marker_normalization
-from reactive_diffusion_policy.real_world.publisher.lib import find_marker
+# from reactive_diffusion_policy.real_world.publisher.lib import find_marker
+from reactive_diffusion_policy.real_world.publisher.marker_detection import find_marker
 from reactive_diffusion_policy.real_world.publisher.mctac_utility import MCTacUtility
 from scipy.ndimage import gaussian_filter
 
@@ -37,7 +38,7 @@ class MCTacCameraPublisher(Node):
                  contrast: int = 100,
                  image_rotation: int = 0,
                  camera_name: str = 'left_gripper_camera_1',
-                 vr_server_ip: str = '127.0.0.1',
+                 vr_server_ip: str = '10.112.2.37',
                  vr_server_port: int = 10002,
                  teleop_server_ip: str = '192.168.2.187',
                  teleop_server_port: int = 8082,
@@ -47,7 +48,7 @@ class MCTacCameraPublisher(Node):
                  video_path="../../../data/tactile_video/video_001.mp4",
                  recorded=False,
                  enable_streaming: bool = False,
-                 streaming_server_ip: str = '127.0.0.1',
+                 streaming_server_ip: str = '10.112.2.37',
                  streaming_server_port: int = 10004,
                  streaming_quality: int = 10,
                  streaming_chunk_size: int = 1024,

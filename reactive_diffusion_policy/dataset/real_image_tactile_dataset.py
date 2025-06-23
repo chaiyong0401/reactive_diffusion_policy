@@ -17,6 +17,7 @@ from reactive_diffusion_policy.common.normalize_util import (
 )
 from reactive_diffusion_policy.common.action_utils import absolute_actions_to_relative_actions, get_inter_gripper_actions
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
+import time
 
 class RealImageTactileDataset(BaseImageDataset):
     def __init__(self,
@@ -36,7 +37,11 @@ class RealImageTactileDataset(BaseImageDataset):
                  relative_tcp_obs_for_relative_action=True,
                  transform_params=None,
                  ):
-        assert os.path.isdir(dataset_path)
+        print("realimgaetactiledataset")
+        print(dataset_path)
+        # assert os.path.isdir(dataset_path)
+
+        print("realimgaet")
 
         rgb_keys = list()
         lowdim_keys = list()
@@ -45,8 +50,10 @@ class RealImageTactileDataset(BaseImageDataset):
             type = attr.get('type', 'low_dim')
             if type == 'rgb':
                 rgb_keys.append(key)
+                print("key:", key)
             elif type == 'low_dim':
                 lowdim_keys.append(key)
+                print("low_dim:", key)
 
         extended_rgb_keys = list()
         extended_lowdim_keys = list()
@@ -58,7 +65,8 @@ class RealImageTactileDataset(BaseImageDataset):
             elif type == 'low_dim':
                 extended_lowdim_keys.append(key)
 
-        zarr_path = os.path.join(dataset_path, 'replay_buffer.zarr')
+        # zarr_path = os.path.join(dataset_path, 'replay_buffer.zarr')
+        zarr_path = os.path.join(dataset_path)
         zarr_load_keys = set(rgb_keys + lowdim_keys + extended_rgb_keys + extended_lowdim_keys + ['action'])
         zarr_load_keys = list(filter(lambda key: "wrt" not in key, zarr_load_keys))
         replay_buffer = ReplayBuffer.copy_from_path(
@@ -104,6 +112,11 @@ class RealImageTactileDataset(BaseImageDataset):
             mask=train_mask, 
             max_n=max_train_episodes, 
             seed=seed)
+        print("=== [DEBUG] ===")
+        print("train mask sum (should be >0):", train_mask.sum())
+        print("n_episodes:", replay_buffer.n_episodes)
+        print("episode ends:", replay_buffer.episode_ends)
+        print("================")
 
         sampler = SequenceSampler(
             replay_buffer=replay_buffer, 
@@ -152,13 +165,52 @@ class RealImageTactileDataset(BaseImageDataset):
             inter_gripper_data_dict = dict_apply(inter_gripper_data_dict, np.stack)
 
         if self.relative_action:
+            #########################################################
+            print(self.lowdim_keys)
+            keys_to_collect = [key for key in (self.lowdim_keys + ['action']) if ('robot_tcp_pose' in key and 'wrt' not in key) or 'action' in key]
+            print("✅ relative_data_dict keys to collect:", keys_to_collect)
+            print("Dataset length:", len(self))
+            if len(self) == 0:
+                raise RuntimeError("❗ Dataset is empty. No samples to process for normalizer calculation.")
+
+            print("=== [DEBUG] Sampler length ===")
+            print(len(self.sampler))
+
+            for idx in range(len(self.sampler)):
+                sample = self.sampler.sample_sequence(idx)
+                print(f"Sample {idx} ok")
+                break
+            sample0 = self.sampler.sample_sequence(0)
+            print("DEBUG: sample type: ", type(sample0))
+            if isinstance(sample0, dict):
+                print("DEBUG: sample0 keys:", list(sample0.keys()))
+                for k, v in sample0.items():
+                    if hasattr(v, "shape"):
+                        print(f"  - {k}: array, shape {v.shape}")
+                    elif isinstance(v, (list, tuple)):
+                        print(f"  - {k}: list/tuple, len {len(v)}")
+                    else:
+                        print(f"  - {k}: {type(v)}, value {v}")
+            ######################################################
             relative_data_dict = {key: list() for key in (self.lowdim_keys + ['action']) if ('robot_tcp_pose' in key and 'wrt' not in key) or 'action' in key}
             for data in tqdm.tqdm(self, leave=False, desc='Calculating relative action/obs for normalizer'):
+            # for idx in tqdm.tqdm(range(len(self.sampler)), desc='Calculating relative action/obs for normalizer'):
+            #     data = self.sampler.sample_sequence(idx)
                 for key in relative_data_dict.keys():
                     if key == 'action':
                         relative_data_dict[key].append(data[key])
+                        # print("action:", data[key])
                     else:
                         relative_data_dict[key].append(data['obs'][key])
+                        # print("left_robot_tcp_pose:", data['obs'][key])
+                        
+                        # relative_data_dict[key].append(data[key])
+                        # print("left_robot_tcp_pose:", data[key])
+            
+            # data loading check
+            for key, arr in relative_data_dict.items():
+                print(f"DEBUG: '{key}' has {len(arr)} samples")
+
             relative_data_dict = dict_apply(relative_data_dict, np.stack)
 
         # action
@@ -257,13 +309,18 @@ class RealImageTactileDataset(BaseImageDataset):
         # observations are already taken care of by T_slice
         if self.n_latency_steps > 0:
             action = action[self.n_latency_steps:]
+            print("action: ", action)
         
         if self.relative_action:
             base_absolute_action = np.concatenate([
                 obs_dict['left_robot_tcp_pose'][-1] if 'left_robot_tcp_pose' in obs_dict else np.array([]),
                 obs_dict['right_robot_tcp_pose'][-1] if 'right_robot_tcp_pose' in obs_dict else np.array([])
             ], axis=-1)
+            # print("action before relateive: ", action)
+            # print("base_absolute_action: ", base_absolute_action)
+            # time.sleep(5)
             action = absolute_actions_to_relative_actions(action, base_absolute_action=base_absolute_action)
+            # print("relative action: ", action)
 
             if self.relative_tcp_obs_for_relative_action:
                 for key in self.lowdim_keys:

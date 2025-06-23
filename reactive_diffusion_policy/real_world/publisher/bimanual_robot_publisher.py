@@ -8,10 +8,10 @@ import requests
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped, Point, TwistStamped, WrenchStamped
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Float32MultiArray
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
 from reactive_diffusion_policy.common.data_models import BimanualRobotStates, ForceSensorMessage, Arrow
-from reactive_diffusion_policy.common.space_utils import pose_7d_to_4x4matrix, matrix4x4_to_pose_6d
+from reactive_diffusion_policy.common.space_utils import pose_7d_to_4x4matrix, matrix4x4_to_pose_6d, pose_7d_to_pose_6d
 from loguru import logger
 
 class BimanualRobotPublisher(Node):
@@ -22,7 +22,7 @@ class BimanualRobotPublisher(Node):
                  robot_server_ip: str,
                  robot_server_port: int,
                  transforms: RealWorldTransforms,
-                 vr_server_ip: str = '127.0.0.1',
+                 vr_server_ip: str = '10.112.2.37',
                  vr_server_tcp_port: int = 10001,
                  vr_server_force_port: int = 10005,
                  fps: int = 120,
@@ -51,6 +51,11 @@ class BimanualRobotPublisher(Node):
         self.right_tcp_vel_publisher = self.create_publisher(TwistStamped, 'right_tcp_vel', 10)
         self.left_tcp_wrench_publisher = self.create_publisher(WrenchStamped, 'left_tcp_wrench', 10)
         self.right_tcp_wrench_publisher = self.create_publisher(WrenchStamped, 'right_tcp_wrench', 10)
+
+        # also publish tactile taxel arrays directly
+        # self.left_tcp_taxels_publisher = self.create_publisher(Float32MultiArray, 'left_tcp_taxels', 10)
+        # self.right_tcp_taxels_publisher = self.create_publisher(Float32MultiArray, 'right_tcp_taxels', 10)
+
 
         self.timer = self.create_timer(1 / fps, self.timer_callback)
         # Create a session with robot server
@@ -163,6 +168,8 @@ class BimanualRobotPublisher(Node):
         tcp_pose_left_msg.header.stamp = timestamp
         tcp_pose_left_msg.header.frame_id = 'tcp_left'
         # robot_states.leftRobotTCP (x, y, z, qw, qx, qy, qz)
+        # logger.info(f"tcp_pose_left_msg 7d in robot publisher timer_callback: {robot_states.leftRobotTCP}")
+        # logger.info(f"tcp_pose_left_msg_6d in robot publisher timer_callback: {pose_7d_to_pose_6d(robot_states.leftRobotTCP)}")
         tcp_pose_left_msg.pose.position = Point(x=robot_states.leftRobotTCP[0],
                                                 y=robot_states.leftRobotTCP[1],
                                                 z=robot_states.leftRobotTCP[2])
@@ -232,6 +239,15 @@ class BimanualRobotPublisher(Node):
         right_tcp_wrench_msg.wrench.torque.y = robot_states.rightRobotTCPWrench[4]
         right_tcp_wrench_msg.wrench.torque.z = robot_states.rightRobotTCPWrench[5]
         self.right_tcp_wrench_publisher.publish(right_tcp_wrench_msg)
+
+        # Publish the raw tactile taxel arrays
+        # left_taxel_msg = Float32MultiArray()
+        # left_taxel_msg.data = robot_states.leftRobotTCPWrench
+        # self.left_tcp_taxels_publisher.publish(left_taxel_msg)
+
+        # right_taxel_msg = Float32MultiArray()
+        # right_taxel_msg.data = robot_states.rightRobotTCPWrench
+        # self.right_tcp_taxels_publisher.publish(right_taxel_msg)
 
         # Calculate fps
         self.frame_count += 1

@@ -18,8 +18,9 @@ from loguru import logger
 
 from reactive_diffusion_policy.real_world.publisher.realsense_camera_publisher import RealsenseCameraPublisher
 from reactive_diffusion_policy.real_world.publisher.usb_camera_publisher import UsbCameraPublisher
-from reactive_diffusion_policy.real_world.publisher.gelsight_camera_publisher import GelsightCameraPublisher
+# from reactive_diffusion_policy.real_world.publisher.gelsight_camera_publisher import GelsightCameraPublisher
 from reactive_diffusion_policy.real_world.publisher.mctac_camera_publisher import MCTacCameraPublisher
+from reactive_diffusion_policy.real_world.publisher.gopro_camera_publisher import UvcCameraPublisher
 from reactive_diffusion_policy.real_world.device_mapping.device_mapping_server import DeviceToTopic, DeviceMappingServer
 
 # add this to prevent assigning too may threads when using numpy
@@ -40,9 +41,9 @@ class SchedParam(ctypes.Structure):
 param = SchedParam()
 param.sched_priority = 99  # highest priority
 
-pid = os.getpid()
-if libc.sched_setscheduler(pid, SCHED_RR, ctypes.byref(param)) != 0:
-    raise OSError("Failed to set scheduler")
+# pid = os.getpid()
+# if libc.sched_setscheduler(pid, SCHED_RR, ctypes.byref(param)) != 0:
+#     raise OSError("Failed to set scheduler")
 
 class CameraWorker:
     def __init__(self, camera_config):
@@ -51,10 +52,12 @@ class CameraWorker:
             self.camera_publisher = RealsenseCameraPublisher(**camera_config)
         elif camera_config.camera_type == 'USB':
             self.camera_publisher = UsbCameraPublisher(**camera_config)
-        elif camera_config.camera_type == 'gelsight':
-            self.camera_publisher = GelsightCameraPublisher(**camera_config)
+        # elif camera_config.camera_type == 'gelsight':
+        #     self.camera_publisher = GelsightCameraPublisher(**camera_config)
         elif camera_config.camera_type == 'MCTac':
             self.camera_publisher = MCTacCameraPublisher(**camera_config)
+        elif camera_config.camera_type == 'gopro':
+            self.camera_publisher = UvcCameraPublisher(**camera_config)
         else:
             raise NotImplementedError
     def handle_signal(self, signum, frame):
@@ -86,6 +89,8 @@ def start_camera_publisher(camera_config):
     config_path="reactive_diffusion_policy/config", config_name="real_world_env", version_base="1.3"
 )
 def main(cfg: DictConfig):
+    if multiprocessing.get_start_method(allow_none=True) != 'spawn':
+        multiprocessing.set_start_method('spawn', force=True)
     try:
         device_mapper_server = DeviceMappingServer(publisher_cfg=cfg.task.publisher,
                                                    **cfg.task.device_mapping_server)
@@ -96,13 +101,33 @@ def main(cfg: DictConfig):
         # require the latest mapping of name and topic from fastAPI
         response = requests.get(f"http://{cfg.task.device_mapping_server.host_ip}:{cfg.task.device_mapping_server.port}/get_mapping")
         device_to_topic = DeviceToTopic.model_validate(response.json())
+        print("device_to_topic:", device_to_topic)
 
         # launch the subprocesses based on the mapping from fastapi server
         processes = []
         # Handle realsense cameras
-        for camera_name, camera_info in device_to_topic.realsense.items():
+        # for camera_name, camera_info in device_to_topic.realsense.items():
+        #     camera_config = None
+        #     for cam in cfg.task.publisher.realsense_camera_publisher:
+        #         if cam.camera_name == camera_name:
+        #             camera_config = cam
+        #             break
+        #     if camera_config:
+        #         # Assigning device_id and type
+        #         OmegaConf.set_struct(camera_config, False)
+        #         camera_config.camera_serial_number = camera_info.device_id
+        #         OmegaConf.set_struct(camera_config, True)
+
+        #         p = multiprocessing.Process(target=start_camera_publisher, args=(camera_config,))
+        #         processes.append(p)
+        #         p.start()
+        
+        # handle gopro camera
+        for camera_name, camera_info in device_to_topic.gopro.items():
             camera_config = None
-            for cam in cfg.task.publisher.realsense_camera_publisher:
+            print("camera_name: ", camera_name)
+            print("camera_info: ", camera_info)
+            for cam in cfg.task.publisher.gopro_camera_publisher:
                 if cam.camera_name == camera_name:
                     camera_config = cam
                     break
@@ -111,6 +136,7 @@ def main(cfg: DictConfig):
                 OmegaConf.set_struct(camera_config, False)
                 camera_config.camera_serial_number = camera_info.device_id
                 OmegaConf.set_struct(camera_config, True)
+                print("camera_serial_number:", camera_config.camera_serial_number)
 
                 p = multiprocessing.Process(target=start_camera_publisher, args=(camera_config,))
                 processes.append(p)

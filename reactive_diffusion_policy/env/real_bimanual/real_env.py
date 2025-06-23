@@ -65,9 +65,10 @@ class RealRobotEnvironment(Node):
                  data_processing_params: DictConfig,
                  max_fps: int = 30,
                  # gripper control parameters
-                 use_force_control_for_gripper: bool = True,
-                 max_gripper_width: float = 0.05,
-                 min_gripper_width: float = 0.,
+                #  use_force_control_for_gripper: bool = True,
+                 use_force_control_for_gripper: bool = False,
+                 max_gripper_width: float = 0.001,
+                 min_gripper_width: float = 0.0001,
                  grasp_force: float = 5.0,
                  enable_gripper_interval_control: bool = False,
                  gripper_control_time_interval: float = 60,
@@ -99,7 +100,8 @@ class RealRobotEnvironment(Node):
 
         self.data_processing_manager = DataPostProcessingManager(transforms,
                                                                  **data_processing_params)
-        self.debug = debug
+        # self.debug = debug
+        self.debug = True
         self.subscribers = []
         self.obs_buffer = RingBuffer(size=1024, fps=max_fps)
 
@@ -119,17 +121,18 @@ class RealRobotEnvironment(Node):
         self.sensor_msg_list: SensorMessageList = SensorMessageList(sensorMessages=[])
 
         logger.debug("Initializing RealEnv node...")
-        # Get device to topic mapping
+        # Get device to topic mapping - 카메라 관련 정보를 topic으로 받아옴
         response = requests.get(
             f"http://{device_mapping_server_ip}:{device_mapping_server_port}/get_mapping")
         self.device_to_topic_mapping = DeviceToTopic.model_validate(response.json())
 
         subs_name_type = get_topic_and_type(self.device_to_topic_mapping)
+        logger.info(f"subs_name_type: {subs_name_type}")
         depth_camera_point_cloud_topic_names: List[Optional[str]] = [None, None, None]  # external, left wrist, right wrist
         depth_camera_rgb_topic_names: List[Optional[str]] = [None, None, None]  # external, left wrist, right wrist
         tactile_camera_rgb_topic_names: List[Optional[str]] = [None, None, None, None]  # left gripper1, left gripper2, right gripper1, right gripper2
         tactile_camera_marker_topic_names: List[Optional[str]] = [None, None, None, None]  # left gripper1, left gripper2, right gripper1, right gripper2
-
+        tactile_camera_digit_topic_name: List[Optional[str]] = [None]
         for topic, msg_type in subs_name_type:
             if "depth/points" in topic:
                 if "external_camera" in topic:
@@ -165,6 +168,10 @@ class RealRobotEnvironment(Node):
                 elif "right_gripper_camera_2" in topic:
                     tactile_camera_marker_topic_names[3] = topic
 
+            elif "digit_offset/information" in topic:
+                if "left_gripper_camera_1" in topic:
+                    tactile_camera_digit_topic_name[0] = topic
+
         self.time_check = time_check
         self.timestamps = {name: [] for name, _ in get_topic_and_type(self.device_to_topic_mapping)}
         # for calculating FPS
@@ -176,24 +183,28 @@ class RealRobotEnvironment(Node):
             logger.debug(f"Depth camera rgb topic names: {depth_camera_rgb_topic_names}")
             logger.debug(f"Tactile camera rgb topic names: {tactile_camera_rgb_topic_names}")
             logger.debug(f"Tactile camera marker topic names: {tactile_camera_marker_topic_names}")
+            logger.debug(f"Tactile camera digit topic names: {tactile_camera_digit_topic_name}")
 
         self.data_converter = ROS2DataConverter(self.transforms,
                                                 depth_camera_point_cloud_topic_names,
                                                 depth_camera_rgb_topic_names,
                                                 tactile_camera_rgb_topic_names,
                                                 tactile_camera_marker_topic_names,
+                                                tactile_camera_digit_topic_name,
                                                 debug=self.debug)
 
         for name, msg_type in subs_name_type:
             self.subscribers.append(Subscriber(self, msg_type, name))
             logger.debug(f"Subscribed to topic: {name} with type: {msg_type}")
 
-        # ApproximateTimeSynchronizer is used to synchronize multiple topics
+        # ApproximateTimeSynchronizer is used to synchronize multiple topics 
+        # self.ts = ApproximateTimeSynchronizer(self.subscribers, queue_size=40, slop=0.4,
+        #                                       allow_headerless=False) # original
         self.ts = ApproximateTimeSynchronizer(self.subscribers, queue_size=40, slop=0.4,
-                                              allow_headerless=False)
+                                              allow_headerless=True)
 
         self.ts.registerCallback(self.callback)
-
+        logger.debug("ApproximateTimeSynchronizer registered with callback")
         # Create a session with robot server
         self.session = requests.session()
 
@@ -221,6 +232,7 @@ class RealRobotEnvironment(Node):
     # @pyinstrument.profile()
     def callback(self, *msgs):
         topic_dict = dict()
+        # logger.debug(f"Received {len(msgs)} messages from synchronized topics")
         for i, msg in enumerate(msgs):
             topic_name = self.subscribers[i].topic
             topic_dict[topic_name] = msg
@@ -228,20 +240,49 @@ class RealRobotEnvironment(Node):
         if self.time_check:
             # check the time differences across topics and interval between time stamps
             for i, msg in enumerate(msgs):
-                topic_name = self.subscribers[i].topic
-                self.timestamps[topic_name].append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+                # topic_name = self.subscribers[i].topic
+                # self.timestamps[topic_name].append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+                if hasattr(msg, "header"):
+                    topic_name = self.subscribers[i].topic
+                    self.timestamps[topic_name].append(
+                        msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+                    )
+                else:
+                    # For messages without header, we can use the current time as a timestamp
+                    current_time = convert_ros_time_to_float(self.get_clock().now())
+                    topic_name = self.subscribers[i].topic
+                    self.timestamps[topic_name].append(current_time)
+
+        # logger.debug(f"Received messages from {len(msgs)} topics: {[self.subscribers[i].topic for i in range(len(msgs))]}")
 
         if self.debug:
         # if True:
-            # calculate the lastest timestamp in the topic_dict
-            latest_timestamp = max([msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 for msg in msgs])
-            # convert current time (ROS time) to python time
-            current_timestamp = convert_ros_time_to_float(self.get_clock().now())
-            # find out the latency compared to current time
-            latency = current_timestamp - latest_timestamp
-            # the latency is approximately 5ms - 10ms (~5000 points per pcd)
-            # the latency is approximately 10ms - 26ms (without point cloud)
-            logger.debug(f"Latency for time synchronizer: {latency:.4f} seconds")
+            # # calculate the lastest timestamp in the topic_dict
+            # latest_timestamp = max([msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 for msg in msgs])
+            # # convert current time (ROS time) to python time
+            # current_timestamp = convert_ros_time_to_float(self.get_clock().now())
+            # # find out the latency compared to current time
+            # latency = current_timestamp - latest_timestamp
+            # # the latency is approximately 5ms - 10ms (~5000 points per pcd)
+            # # the latency is approximately 10ms - 26ms (without point cloud)
+            # logger.debug(f"Latency for time synchronizer: {latency:.4f} seconds")
+
+            timestamps = [
+                msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+                for msg in msgs
+                if hasattr(msg, "header")
+            ]
+            if timestamps:
+                latest_timestamp = max(timestamps)
+                # convert current time (ROS time) to python time
+                current_timestamp = convert_ros_time_to_float(self.get_clock().now())
+                # find out the latency compared to current time
+                latency = current_timestamp - latest_timestamp
+                # the latency is approximately 5ms - 10ms (~5000 points per pcd)
+                # the latency is approximately 10ms - 26ms (without point cloud)
+                # logger.debug(
+                #     f"Latency for time synchronizer: {latency:.4f} seconds"
+                # )
 
         # this part takes about 10ms - 15ms for now (~5000 points per pcd)
         # this part takes about 3ms (with RGB only) for now
@@ -250,11 +291,13 @@ class RealRobotEnvironment(Node):
         # convert sensor msg to obs dict
         # this part takes about 2ms (without point cloud)
         raw_obs_dict = self.data_processing_manager.convert_sensor_msg_to_obs_dict(sensor_msg)
-
+        # logger.debug(f"raw_obs_dict keys: {raw_obs_dict.keys()}")
+        # logger.debug(f"obs_dict['left_robot_tcp_pose' = {raw_obs_dict['left_robot_tcp_pose']}")
         self.obs_buffer.push(raw_obs_dict)
 
         # record experiment data
         if self.enable_exp_recording:
+            
             recorded_sensor_msg = deepcopy(sensor_msg)
 
             vcamera_image = self.get_vcamera_image()
@@ -345,6 +388,7 @@ class RealRobotEnvironment(Node):
             A dictionary containing stacked observations
         """
         # Get last n*ratio observations to ensure we have enough samples after downsampling
+        # obs_buffer에 최근에 들어온 observation(sensor msgs)들을 누적하고 있음 
         last_n_obs_list, _ = self.obs_buffer.peek_last_n(
             obs_steps * temporal_downsample_ratio)  # newest to oldest
 
@@ -368,6 +412,13 @@ class RealRobotEnvironment(Node):
         for key in downsampled_obs_list[0].keys():
             result[key] = stack_last_n_obs(
                 [obs[key] for obs in downsampled_obs_list], obs_steps)
+            # DEBUG
+            # print(f"[get_obs] key: {key}, shape: {result[key].shape}")
+            # if isinstance(result[key], np.ndarray):
+            #     print(f"[get_obs] sample values for {key}:\n{result[key].flatten()[:5]}")
+            # else:
+            #     print(f"[get_obs] {key} is not a numpy array")
+
 
         # convert current time (ROS time) to python time
         current_timestamp = convert_ros_time_to_float(self.get_clock().now())
@@ -387,16 +438,17 @@ class RealRobotEnvironment(Node):
             'velocity': 10.0,
             'force_limit': self.grasp_force
         })
-        self.last_gripper_width_target[0] = left_gripper_width_target
-        self.send_command('/move_gripper/right', {
-            'width': right_gripper_width_target,
-            'velocity': 10.0,
-            'force_limit': self.grasp_force
-        })
+        logger.info(f"/move_gripper/left : {left_gripper_width_target}")
+        # self.last_gripper_width_target[0] = left_gripper_width_target
+        # self.send_command('/move_gripper/right', {
+        #     'width': right_gripper_width_target,
+        #     'velocity': 10.0,
+        #     'force_limit': self.grasp_force
+        # })
         self.last_gripper_width_target[1] = right_gripper_width_target
 
     def send_gripper_command(self, left_gripper_width_target: float, right_gripper_width_target: float, is_bimanual: bool = False):
-        if self.enable_gripper_interval_control and self.start_gripper_interval_control:
+        if self.enable_gripper_interval_control and self.start_gripper_interval_control:    # enable_gripper_interval_control이 참이면, gripper_control_time_interval 만큼 지난 경우 제어
             self.gripper_interval_count += 1
             if self.gripper_interval_count % self.gripper_control_time_interval == 0:
                 self.gripper_interval_count = 0
@@ -405,7 +457,7 @@ class RealRobotEnvironment(Node):
                 return
 
         if self.enable_gripper_width_clipping:
-            if left_gripper_width_target < self.gripper_width_threshold:
+            if left_gripper_width_target < self.gripper_width_threshold:    # target width가 threshold보다 작은 경우 강제로 최소값 설정 
                 left_gripper_width_target = self.min_gripper_width
                 self.start_gripper_interval_control = True
             if is_bimanual:
@@ -415,12 +467,17 @@ class RealRobotEnvironment(Node):
         else:
             self.start_gripper_interval_control = True
 
-        robot_states = BimanualRobotStates.model_validate(self.send_command('/get_current_robot_states'))
+        robot_states = BimanualRobotStates.model_validate(self.send_command('/get_current_robot_states'))   # robot server에서 current_robot_state 가져옴 
 
         grasp_force = self.grasp_force
         gripper_control_width_precision = self.gripper_control_width_precision
         left_current_width = robot_states.leftGripperState[0]
-        if abs(self.last_gripper_width_target[0] - left_gripper_width_target) >= gripper_control_width_precision:
+        ########################################################################
+        print("left_current_width(send_gripper_command): ", left_current_width)
+        print("last_gripper_width_target[0]: ",self.last_gripper_width_target[0])
+        gripper_control_width_precision = 0.0
+        #########################################################################
+        if abs(self.last_gripper_width_target[0] - left_gripper_width_target) >= gripper_control_width_precision:   # 이전 목표값과 현재 목표값의 차이가 일정 이상일 때 control
             if self.use_force_control_for_gripper and self.last_gripper_width_target[0] > left_gripper_width_target:
                 # try to close gripper with pure force control
                 logger.debug(f"left gripper moving from {left_current_width} to target: {left_gripper_width_target} "
@@ -429,16 +486,17 @@ class RealRobotEnvironment(Node):
                     'force_limit': grasp_force
                 })
             else:
-                # open gripper with position control
+                # open gripper with position control # use mcy
                 logger.debug(f"left gripper moving from {left_current_width} to target: {left_gripper_width_target}")
                 self.send_command('/move_gripper/left', {
                     'width': left_gripper_width_target,
                     'velocity': 10.0,
                     'force_limit': grasp_force
                 })
+                print("open gripper with position control")
             self.last_gripper_width_target[0] = left_gripper_width_target
 
-        if is_bimanual:
+        if is_bimanual: # 오른손 제어 
             right_current_width = robot_states.rightGripperState[0]
             if abs(self.last_gripper_width_target[1] - right_gripper_width_target) >= gripper_control_width_precision:
                 if self.use_force_control_for_gripper and self.last_gripper_width_target[1] > right_gripper_width_target:
@@ -466,6 +524,7 @@ class RealRobotEnvironment(Node):
         """
         left_action = action[:8]
         right_action = action[8:]
+        print("left_action with gripper: ", left_action)
 
         # calculate target gripper width
         if use_relative_action:
@@ -483,7 +542,10 @@ class RealRobotEnvironment(Node):
         left_tcp_target_7d_in_robot = pose_6d_to_pose_7d(left_tcp_target_6d_in_robot)
         right_tcp_target_7d_in_robot = pose_6d_to_pose_7d(right_tcp_target_6d_in_robot)
 
-        self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_7d_in_robot.tolist()})
+        # print("send_command /move_tcp/left, left_tcp_target_7d_in_robot:", left_tcp_target_7d_in_robot.tolist())
+        # self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_7d_in_robot.tolist()})
+        logger.info(f"send_command /move_tcp/left, left_tcp_target_6d_in_robot: {left_tcp_target_6d_in_robot.tolist()}")
+        self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_6d_in_robot.tolist()})
         if is_bimanual:
             self.send_command('/move_tcp/right', {'target_tcp': right_tcp_target_7d_in_robot.tolist()})
 

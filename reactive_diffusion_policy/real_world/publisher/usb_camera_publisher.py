@@ -32,7 +32,7 @@ class UsbCameraPublisher(Node):
                  exposure: int = -6,
                  contrast: int = 100,
                  camera_name: str = 'left_gripper_camera_1',
-                 vr_server_ip: str = '127.0.0.1',
+                 vr_server_ip: str = '10.112.2.37',
                  vr_server_port: int = 10002,
                  dimension=3,
                  marker_reset_interval: float = 60.0,

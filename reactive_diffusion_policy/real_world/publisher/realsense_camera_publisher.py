@@ -30,7 +30,7 @@ class RealsenseCameraPublisher(Node):
                  decimate: int = 2,  # (0-4) decimation_filter magnitude for point cloud
                  random_sample_point_num: int = 10000,
                  enable_streaming: bool = False,
-                 streaming_server_ip: str = '127.0.0.1',
+                 streaming_server_ip: str = '10.112.2.37',
                  streaming_server_port: int = 10004,
                  streaming_quality: int = 10,
                  streaming_chunk_size: int = 1024,

@@ -47,6 +47,28 @@ publisher:
           scale: [ 0.005, 0.005, 0.005 ]
       cpu_core_id:
         - 10
+  # gopro camera
+  gopro_camera_publisher: 
+    - camera_serial_number: '0000'
+      camera_type: 'gopro'
+      camera_name: 'gopro_camera'
+      rgb_resolution: [224, 224]
+      # depth_resolution: [640, 480]
+      # random_sample_point_num: 3000
+      fps: 24
+      decimate: 2  # (0-4) decimation_filter magnitude for point cloud
+      cpu_core_id:
+        - 10
+      # enable_streaming: False
+      # streaming_server_ip: ${task.publisher.vr_server_ip}
+      # streaming_server_port: 10004
+      # streaming_quality: 10 # (0-100) 0: lowest quality, smallest size, 100: highest quality, largest size
+      # streaming_chunk_size: 1024
+      # streaming_display_params_list:
+      #   - position: [ -0.5, 0.0, 0.8 ]
+      #     rotation: [ -90, 50, 0. ]
+      #     scale: [ 0.005, 0.005, 0.005 ]
+
   # USB camera (GelSight)
   usb_camera_publisher:
     - camera_name: 'left_gripper_camera_1'

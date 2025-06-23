@@ -87,13 +87,13 @@ class DecoderRNN(nn.Module):
         super(DecoderRNN, self).__init__()
         self.rnn = nn.GRU(global_cond_dim + temporal_cond_dim, hidden_dim, layer_num, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_dim)
-        self.apply(weights_init_encoder)
+        self.apply(weights_init_encoder)    # 내부 모듈 weight 초기화
 
     def forward(self, global_cond, temporal_cond):
-        global_cond = global_cond.unsqueeze(1).expand(-1, temporal_cond.size(1), -1)
-        x = torch.cat([global_cond, temporal_cond], dim=-1)
-        x, _ = self.rnn(x)
-        x = self.fc(x)
+        global_cond = global_cond.unsqueeze(1).expand(-1, temporal_cond.size(1), -1) # global_cond: [B,D1(global_cond_dim)], temporal_cond: [B,T,D2(temporal_cond_dim)] -> global_cond = [B,T,D1]
+        x = torch.cat([global_cond, temporal_cond], dim=-1) # x = [B,T,D1+D2]
+        x, _ = self.rnn(x)  # 각 time step에 대해 hidden state 출력 return
+        x = self.fc(x)  # [B,T,output_dim]
         x = einops.rearrange(x, "N T A -> N (T A)")
         return x
 
@@ -253,7 +253,7 @@ class VAE:
         return state_vq, posterior
 
     def postprocess_quant_state_without_vq(self, state_vq):
-        state_vq = einops.rearrange(state_vq, "N (T A) -> N A T", T=self.downsampled_input_h)
+        state_vq = einops.rearrange(state_vq, "N (T A) -> N A T", T=self.downsampled_input_h) # [N, A*T] -> [N,A,T]
         state_vq = self.post_quant(state_vq)
         state_vq = einops.rearrange(state_vq, "N A T -> N (T A)")
 

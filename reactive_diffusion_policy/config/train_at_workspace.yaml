@@ -1,5 +1,6 @@
 defaults:
-  - task: real_peel_image_gelsight_emb_at_24fps
+  - task: real_umi_image_xela_wrench_at_24fps
+  # - task: real_peel_image_gelsight_emb_at_24fps
   - at: at_peel
   - _self_
 

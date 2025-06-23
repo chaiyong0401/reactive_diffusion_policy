@@ -6,6 +6,7 @@ import socket
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import Image, PointCloud2, PointField
+from std_msgs.msg import Float32MultiArray
 import json
 from loguru import logger
 import math
@@ -20,9 +21,43 @@ import open3d as o3d
 
 from reactive_diffusion_policy.common.data_models import TactileSensorMessage, Arrow
 from reactive_diffusion_policy.common.tactile_marker_utils import marker_normalization
-from reactive_diffusion_policy.real_world.publisher.lib import find_marker
+# from reactive_diffusion_policy.real_world.publisher.lib import find_marker
+from reactive_diffusion_policy.real_world.publisher.marker_detection import find_marker
 from reactive_diffusion_policy.real_world.publisher.gelsight_utility import GelsightUtility
 import pyinstrument
+
+import glob
+import torch
+from pathlib import Path
+import yaml
+base_path = Path(__file__).parent.parent.resolve()
+origitnal_digit_base_path = Path(__file__).parent.parent.parent.parent.resolve()
+
+import sys
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+print(ROOT_DIR)
+
+DIGIT_DEPTH_PATH = os.path.join(ROOT_DIR, "digit-depth")
+print("DIGIT_DEPTH_PATH:", DIGIT_DEPTH_PATH)
+
+sys.path.append(DIGIT_DEPTH_PATH)
+os.chdir(DIGIT_DEPTH_PATH)
+
+digit_depth_path2 = Path(DIGIT_DEPTH_PATH)
+config_path = digit_depth_path2 / "config" / "digit.yaml"
+with open(config_path, 'r') as f:
+    cfg = yaml.safe_load(f)
+
+from digit_depth.digit.digit_sensor import DigitSensor
+from digit_depth.train.prepost_mlp import *
+from digit_depth.handlers import find_recent_model
+from digit_depth.third_party import geom_utils
+
+# device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model_path = find_recent_model(f"{origitnal_digit_base_path}/digit-depth/models")
+model = torch.load(model_path).to(device)
+model.eval()
 
 class GelsightCameraPublisher(Node):
     '''
@@ -36,7 +71,7 @@ class GelsightCameraPublisher(Node):
                  exposure: int = -6,
                  contrast: int = 100,
                  camera_name: str = 'left_gripper_camera_1',
-                 vr_server_ip: str = '127.0.0.1',
+                 vr_server_ip: str = '10.112.2.37',
                  vr_server_port: int = 10002,
                  teleop_server_ip: str = '192.168.2.187',
                  teleop_server_port: int = 8082,
@@ -46,7 +81,7 @@ class GelsightCameraPublisher(Node):
                  video_path="../../../data/tactile_video/video_001.mp4",
                  recorded=False,
                  enable_streaming: bool = False,
-                 streaming_server_ip: str = '127.0.0.1',
+                 streaming_server_ip: str = '10.112.2.37',
                  streaming_server_port: int = 10004,
                  streaming_quality: int = 10,
                  streaming_chunk_size: int = 1024,
@@ -66,8 +101,10 @@ class GelsightCameraPublisher(Node):
         self.fps = fps
         self.contrast = contrast
         self.exposure = exposure
-        self.width = 640
-        self.height = 480
+        # self.width = 640
+        # self.height = 480
+        self.width = 240
+        self.height = 320
         self.debug = debug
         self.dimension = dimension
         self.marker_vis_rotation_angle = np.deg2rad(marker_vis_rotation_angle)
@@ -76,6 +113,15 @@ class GelsightCameraPublisher(Node):
 
         self.color_publisher_ = self.create_publisher(Image, f'/{camera_name}/color/image_raw', 10)
         self.marker_publisher = self.create_publisher(PointCloud2, f'/{camera_name}/marker_offset/information', 10)
+        self.digit_publisher = self.create_publisher(PointCloud2, f'/{camera_name}/digit_offset/information', 10)
+        self.image_folder = "/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/digit-depth/data/2025-03-13_16-43-20"
+        self.image_paths = sorted(glob.glob(os.path.join(self.image_folder, "frame_*.png")))
+        self.image_index = 0
+        self.grad_index =0
+        self.gradx_img =0
+        self.grady_img =0
+        self.img_np = 0
+        self.img_depth = 0
         self.timer = self.create_timer(1 / fps, self.timer_callback)
         self.timestamp_offset = None
 
@@ -123,14 +169,14 @@ class GelsightCameraPublisher(Node):
         # create matching for gelsight camera
         self.GelsightHandler = GelsightUtility(RESCALE=1)
         self.RESCALE = self.GelsightHandler.RESCALE
-        self.m = find_marker.Matching(
-            N_=self.GelsightHandler.N,
-            M_=self.GelsightHandler.M,
-            fps_=self.GelsightHandler.fps,
-            x0_=self.GelsightHandler.x0,
-            y0_=self.GelsightHandler.y0,
-            dx_=self.GelsightHandler.dx,
-            dy_=self.GelsightHandler.dy)
+        # self.m = find_marker.Matching(
+        #     N_=self.GelsightHandler.N,
+        #     M_=self.GelsightHandler.M,
+        #     fps_=self.GelsightHandler.fps,
+        #     x0_=self.GelsightHandler.x0,
+        #     y0_=self.GelsightHandler.y0,
+        #     dx_=self.GelsightHandler.dx,
+        #     dy_=self.GelsightHandler.dy)
         """
         N_, M_: the row and column of the marker array
         x0_, y0_: the coordinate of upper-left marker
@@ -178,6 +224,7 @@ class GelsightCameraPublisher(Node):
             logger.warning("Camera is not running")
 
     def get_rgb_frame(self):
+        start_time = time.monotonic()
         if self.cap is not None:
             ret, frame = self.cap.read()
             timestamp = self.get_clock().now()
@@ -189,14 +236,109 @@ class GelsightCameraPublisher(Node):
             resized_frame = cv2.resize(frame, (self.width, self.height))
             # logger.info(f'the shape of the resized frame is {resized_frame.shape}')
             frame = self.GelsightHandler.img_initiation(resized_frame)
-            # logger.info(f'The size of the frame after initiation is {frame.shape}')
+            cv2.imwrite("test_img.png", frame)
+            duration = time.monotonic() - start_time
+            logger.debug(f"[PROFILE] get_rgb_image time:{duration:.4f} seconds")
             return frame, timestamp
         else:
             logger.error("Camera is not running")
             raise Exception("Camera is not running")
+    
+    def get_rgb_folder_frame(self):
+
+        if self.image_index >= len(self.image_paths):
+            self.image_index = 0 
+
+        image_path = self.image_paths[self.image_index]
+        frame = cv2.imread(image_path)
+        self.image_index += 1
+
+        if frame is None:
+            logger.error(f"Failed to read image: {image_path}")
+            raise Exception("Failed to read image.")
+
+        timestamp = self.get_clock().now()
+        self.img = frame
+
+        resized_frame = cv2.resize(frame, (self.width, self.height))
+        frame = self.GelsightHandler.img_initiation(resized_frame)
+        # cv2.imwrite("test_img.png", frame)
+
+        return frame, timestamp
 
     def get_marker_image(self, img):
         #  get marker images and motion vectors of the frame
+
+        ### FOR DIGIT Sensor
+        start_time = time.monotonic()
+        # logger.debug(f"device: {device}")
+        # logger.debug(f"digit image size: {img.shape}")
+
+        
+        if self.grad_index == 0:
+            self.img_np = preproc_mlp(img)
+            self.img_np = self.img_np.to(device) # long time 
+            self.img_np = model(self.img_np).detach().cpu().numpy()
+            self.img_np, _ = post_proc_mlp(self.img_np)
+            self.gradx_img, self.grady_img = geom_utils._normal_to_grad_depth(img_normal=self.img_np,
+                            gel_width=cfg['sensor']['gel_width'], gel_height= cfg['sensor']['gel_height'], bg_mask=None)
+            self.grad_index = self.grad_index+1
+            self.img_depth = geom_utils._integrate_grad_depth(self.gradx_img, self.grady_img, boundary=None, bg_mask=None, max_depth=cfg['max_depth'])
+            self.img_depth = self.img_depth.detach().cpu().numpy()
+        else:
+            pass
+
+        # img_tensor = preproc_mlp(img)
+        # t1 = time.monotonic()
+        # img_tensor = img_tensor.to(device, non_blocking=True) # long time 
+        # with torch.no_grad():
+        #     normal_map = model(img_tensor) 
+        # t2 = time.monotonic()
+        # normal_map_cpu = normal_map.detach().cpu().numpy()
+        # normal_map_np, _ = post_proc_mlp(normal_map_cpu)
+        # t3 = time.monotonic()
+        # gradx_img, grady_img = geom_utils._normal_to_grad_depth(
+        # img_normal=normal_map_np,
+        # gel_width=cfg['sensor']['gel_width'],
+        # gel_height=cfg['sensor']['gel_height'],
+        # bg_mask=None,
+        # )
+        # t4 = time.monotonic()
+        # gradx_img_t = gradx_img.float().to(device)
+        # grady_img_t = grady_img.float().to(device)
+
+        # img_depth = geom_utils._integrate_grad_depth(
+        #     gradx_img_t, grady_img_t, boundary=None,
+        #     bg_mask=None, max_depth=cfg['max_depth']
+        # )
+        # img_depth = img_depth.detach().cpu().numpy()
+        # t5 = time.monotonic()
+        # duration2 = time.monotonic() - start_time
+        dm_zero = np.load("/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/digit-depth/dm_zero.npy")
+        
+        ########################################################################
+        H, W = 320, 240
+        grid_y = np.linspace(0, H - 1, 9, dtype=int)  # 0~319 사이 9개 포인트
+        grid_x = np.linspace(0, W - 1, 7, dtype=int)  # 0~239 사이 7개 포인트
+
+        virtual_marker_coords = [(x, y) for y in grid_y for x in grid_x]  # 7 x 9 → 63개
+
+        virtual_marker_coords = np.array(virtual_marker_coords)  # (63,2)
+
+        x_idx = virtual_marker_coords[:, 0]
+        y_idx = virtual_marker_coords[:, 1]
+
+        current_depth = self.img_depth[y_idx, x_idx]  # (63,)
+        initial_depth = dm_zero[y_idx, x_idx]    # (63,)
+        duration = time.monotonic() - start_time
+        # logger.debug(f"[PROFILE] get_marker_image time:{duration:.4f} seconds")
+        # logger.debug(f"[PROFILE] get_marker_image time:{duration2:.4f} seconds")
+        # print(initial_depth)
+        # print(current_depth)
+        marker_motion = current_depth - initial_depth
+        marker_loc = virtual_marker_coords
+        return marker_loc, marker_motion
+        ########################################################################33
 
         mask = self.GelsightHandler.find_marker(img)
         markers_detected = self.GelsightHandler.marker_center(mask)
@@ -465,12 +607,53 @@ class GelsightCameraPublisher(Node):
         msg.data = pointcloud_data # type: ignore
 
         self.marker_publisher.publish(msg)
+    
+    def publish_digit_offset(self, marker_loc, marker_offset, camera_timestamp: Time):
+
+
+        marker_offset = marker_offset * 5000 * -1
+        marker_offset[marker_offset < 0] = 0
+
+        if np.max(marker_offset) < 0.08:
+            norm_offset = np.zeros_like(marker_offset)
+        else:
+            norm_offset = cv2.normalize(marker_offset, None, 0, 255, cv2.NORM_MINMAX)
+        norm_offset = norm_offset.astype(np.float32)
+
+        marker_xyz = np.hstack((marker_loc.astype(np.float32), norm_offset.reshape(-1,1).astype(np.float32))) # (63,3)
+        msg = PointCloud2()
+        msg.header.stamp = camera_timestamp.to_msg()
+        msg.header.frame_id = f'camera_marker_offset_{self.camera_name}'
+        msg.is_bigendian = False
+        msg.point_step = 12  # 3 fields * 4 bytes
+        # msg.row_step = msg.point_step * msg.width
+        msg.is_dense = True
+
+        msg.fields = [
+        PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+    ]
+
+        # Pack the float32 data
+        msg.data = b''.join(
+            map(lambda row: struct.pack('fff', row[0], row[1], row[2]), marker_xyz)         
+            )
+
+        self.digit_publisher.publish(msg)
+        # msg = Float32MultiArray()
+        # msg.data = norm_offset.tolist()  # (63,) 배열
+        # print("norm_offset shape:", norm_offset.shape)
+        # norm_offset = norm_offset.reshape(-1).astype(np.float32)
+        # msg.data = [float(x) for x in norm_offset.tolist()] 
+
+        # self.digit_publisher.publish(msg)
 
     def publish_color_image(self, color_image, camera_timestamp: Time):
         '''
         publish the color image and track markers
         '''
-        success, encoded_image = cv2.imencode('.jpg', color_image)
+        # success, encoded_image = cv2.imencode('.jpg', color_image)
 
         # Fill the message
         msg = Image()
@@ -479,12 +662,14 @@ class GelsightCameraPublisher(Node):
         msg.height, msg.width, _ = color_image.shape
         msg.encoding = "bgr8"
         msg.step = msg.width * 3
-        if success:
-            image_bytes = encoded_image.tobytes()
-            msg.data = image_bytes
-        else:
-            logger.warning('fail to image encoding!')
-            msg.data = color_image.tobytes()
+        # DEBUG
+        msg.data = color_image.tobytes()
+        # if success:
+        #     image_bytes = encoded_image.tobytes()
+        #     msg.data = image_bytes
+        # else:
+        #     logger.warning('fail to image encoding!')
+        #     msg.data = color_image.tobytes()
         self.color_publisher_.publish(msg)
 
     def send_tactile_sensor_msg(self, initial_markers: np.ndarray, marker_offsets: np.ndarray):
@@ -593,7 +778,9 @@ class GelsightCameraPublisher(Node):
         while True:
             # get color frames
             # this part takes about 13ms
-            color_frame, initial_time = self.get_rgb_frame()
+
+            # color_frame, initial_time = self.get_rgb_frame()
+            color_frame, initial_time = self.get_rgb_folder_frame()
 
             # get marker and marker offsets
             # this part takes about 11ms
@@ -602,10 +789,10 @@ class GelsightCameraPublisher(Node):
             initial_markers_copy = copy.deepcopy(initial_markers)
             marker_motion_copy = copy.deepcopy(marker_motion)
             # normalization
-            initial_markers, marker_motion = marker_normalization(initial_markers_copy, marker_motion_copy,
-                                                                  self.dimension,
-                                                                  width=self.width, height=self.height)
-
+            ## DIGIT
+            # initial_markers, marker_motion = marker_normalization(initial_markers_copy, marker_motion_copy,
+            #                                                       self.dimension,
+            #                                                       width=self.width, height=self.height)
             # If rgb frame or marker information not availble, continue
             if (color_frame is None) or (initial_markers is None) or (marker_motion is None):
                 continue
@@ -617,14 +804,14 @@ class GelsightCameraPublisher(Node):
             marker_motion_copy = copy.deepcopy(marker_motion)
 
             # send tactile sensor message to VR server
-            self.send_tactile_sensor_msg(initial_markers_copy, marker_motion_copy)
-
+            # self.send_tactile_sensor_msg(initial_markers_copy, marker_motion_copy)    # DIGIT not use maybe
             # publish the marker offset
-            self.publish_marker_offset(initial_markers, marker_motion, camera_timestamp)
-
+            # self.publish_marker_offset(initial_markers, marker_motion, camera_timestamp) # DIGIT not use 
+            self.publish_digit_offset(initial_markers, marker_motion, camera_timestamp)
             # publish the color image
             # this part takes about 13ms
             self.publish_color_image(color_frame, camera_timestamp)
+            # print("tactile sensor fps: ", self.fps)
 
             # send streaming image
             if self.enable_streaming:

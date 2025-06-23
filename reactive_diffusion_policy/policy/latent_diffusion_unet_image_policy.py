@@ -94,10 +94,13 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         """
         obs_dict: must include "obs" key
         result: must include "action" key
+        return_latent_action = True 이면, 
+        action_pred = [B, original_horizon, latent_dim], original_horizon(action chunk 길이: 10)
+        action = [B, n_action_steps, latent_dim]
         """
         assert 'past_action' not in obs_dict  # not implemented yet
         # normalize input
-        nobs = self.normalizer.normalize(obs_dict)
+        nobs = self.normalizer.normalize(obs_dict)  # 정규화된 obs
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
         T = self.horizon
@@ -125,6 +128,7 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
             raise NotImplementedError
 
         # run sampling
+        # latent action 샘플링 
         nlatent_sample = self.conditional_sample(
             cond_data,
             cond_mask,
@@ -137,6 +141,8 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         # decode latent action
         # note: handle latent action correctly
         nlatent_sample = einops.rearrange(nlatent_sample, 'N T A -> N (T A)')
+        
+        # latent action VQ(양자화) 사용 여부, VQ: latent space를 고정된 크기의 codebook을 사용해 압축하여 정보 압축
         if self.at.use_vq:
             if self.use_latent_action_before_vq:
                 state_vq, _, _ = self.at.quant_state_with_vq(nlatent_sample)
@@ -161,12 +167,12 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
             action_pred = self.normalizer['action'].unnormalize(naction_pred)
 
         # hack: align with the training process
-        To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio
+        To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio # (2*1)
         # get action
-        start = To - 1
+        start = To - 1 # (2-1)
         # hack
-        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1
-        end = start + n_action_steps
+        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1  # (10 - 2*1 +1)
+        end = start + n_action_steps # 10
         action = action_pred[:, start:end]
 
         result = {
@@ -175,6 +181,7 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         }
         return result
 
+    # use_mcy
     def predict_from_latent_action(self, latent_action: torch.Tensor, extended_obs_dict: Dict[str, torch.Tensor], extended_obs_last_step: int, dataset_obs_temporal_downsample_ratio: int, extend_obs_pad_after: bool = False):
         Da = self.action_dim
         To = self.n_obs_steps
@@ -197,10 +204,10 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         action_pred = self.normalizer['action'].unnormalize(naction_pred)
 
         # hack: align with the training process
-        To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio
-        start = To - 1
-        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1
-        end = start + n_action_steps
+        To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio # (2*1)
+        start = To - 1  # (2-1)
+        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1   # (10 - 2*1 +1)
+        end = start + n_action_steps    #(1+9)
         action = action_pred[:, start:end]
 
         result = {

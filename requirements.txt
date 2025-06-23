@@ -27,13 +27,15 @@ tensorboardx
 psutil
 click
 boto3
-accelerate
+# accelerate 
+accelerate==0.20.3
 datasets
 diffusers
 av
 cmake
 timm
-peft
+#peft
+peft==0.4.0
 # for teleop
 fastapi
 uvicorn
@@ -46,7 +48,7 @@ transforms3d
 pyinstrument
 py_cli_interaction
 # trick to force reinstall imagecodecs via pip
-imagecodecs==2022.8.8
+# imagecodecs==2022.8.8 # 주석 처리
 pygame
 # install this by yourself
 # torch==1.13.1

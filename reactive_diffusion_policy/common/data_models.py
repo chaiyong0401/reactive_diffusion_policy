@@ -35,8 +35,10 @@ class BimanualRobotStates(BaseModel):
     rightRobotTCP: List[float] = [0.0] * 7  # (7) (x, y, z, qw, qx, qy, qz)
     leftRobotTCPVel: List[float] = [0.0] * 6  # (6) (vx, vy, vz, wx, wy, wz)
     rightRobotTCPVel: List[float] = [0.0] * 6  # (6) (vx, vy, vz, wx, wy, wz)
-    leftRobotTCPWrench: List[float] = [0.0] * 6  # (6) (fx, fy, fz, mx, my, mz)
-    rightRobotTCPWrench: List[float] = [0.0] * 6  # (6) (fx, fy, fz, mx, my, mz)
+    # leftRobotTCPWrench: List[float] = [0.0] * 6  # (6) (fx, fy, fz, mx, my, mz)
+    # rightRobotTCPWrench: List[float] = [0.0] * 6  # (6) (fx, fy, fz, mx, my, mz)
+    leftRobotTCPWrench: List[float] = [0.0] * 16  # (16) (z)
+    rightRobotTCPWrench: List[float] = [0.0] * 16  # (16) (z)
     leftGripperState: List[float] = [0.0] * 2  # (2) (width, force)
     rightGripperState: List[float] = [0.0] * 2  # (2) (width, force)
 
@@ -58,8 +60,10 @@ class SensorMessage(BaseModel):
     rightRobotTCP: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (x, y, z, r, p, y)
     leftRobotTCPVel: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (vx, vy, vz, wx, wy, wz)
     rightRobotTCPVel: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (vx, vy, vz, wx, wy, wz)
-    leftRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (fx, fy, fz, mx, my, mz)
-    rightRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (fx, fy, fz, mx, my, mz)
+    # leftRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (fx, fy, fz, mx, my, mz)
+    # rightRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((6, ), dtype=np.float32))  # (6) (fx, fy, fz, mx, my, mz)
+    leftRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((16, ), dtype=np.float32))  # (16) (z)
+    rightRobotTCPWrench: np.ndarray = Field(default_factory=lambda: np.zeros((16, ), dtype=np.float32))  # (16) (z)
     leftRobotGripperState: np.ndarray = Field(default_factory=lambda: np.zeros((2, ), dtype=np.float32))  # (2) gripper (width, force)
     rightRobotGripperState: np.ndarray = Field(default_factory=lambda: np.zeros((2, ), dtype=np.float32))  # (2) gripper (width, force)
     externalCameraPointCloud: np.ndarray = Field(default_factory=lambda: np.zeros((10, 6), dtype=np.float16)) # (N, 6) (x, y, z, r, g, b)
@@ -80,6 +84,8 @@ class SensorMessage(BaseModel):
         default_factory=lambda: np.zeros((63, 3), dtype=np.float32))  # (num_markers, 3)(x, y, z)
     leftGripperCameraMarkerOffset2: np.ndarray = Field(
         default_factory=lambda: np.zeros((63, 3), dtype=np.float32))  # (num_markers, 2)(x, y,z)
+    leftGripperCameraDigitOffset: np.ndarray = Field(
+        default_factory=lambda: np.zeros((63, 3), dtype=np.float32))  # (num_markers, 1)(digit offset)
     rightGripperCameraRGB1: np.ndarray = Field(default_factory=lambda: np.zeros((24, 32, 3), dtype=np.uint8))  # (H, W, 3) (r, g, b)
     rightGripperCameraMarker1: np.ndarray = Field(
         default_factory=lambda: np.zeros((63, 3), dtype=np.float32))  # (num_markers, 3)(x, y, z)

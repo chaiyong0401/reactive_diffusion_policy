@@ -43,9 +43,10 @@ class TeleopServer:
                  port: int = 8082,
                  fps: int = 120,
                  # gripper control parameters
-                 use_force_control_for_gripper: bool = True,
-                 max_gripper_width: float = 0.1,
-                 min_gripper_width: float=0.01,
+                #  use_force_control_for_gripper: bool = True,
+                 use_force_control_for_gripper: bool = False,
+                 max_gripper_width: float = 0.01,
+                 min_gripper_width: float=0.001,
                  grasp_force: float=5.0,
                  gripper_control_time_interval:int = 60,
                  gripper_control_width_precision=0.02,

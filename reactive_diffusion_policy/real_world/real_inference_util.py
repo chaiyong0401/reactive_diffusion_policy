@@ -35,9 +35,11 @@ def get_real_obs_dict(
             if "wrt" in key:
                 continue
             this_data_in = env_obs[key]
-            if 'pose' in key and shape == (2,):
+            print(f"this_data_in in get_real_obs_dict: {this_data_in}")
+            if 'pose' in key and shape == (2,): # not use in mcy
                 # take X,Y coordinates
                 this_data_in = this_data_in[...,[0,1]]
+                print(f"this_data_in in get_real_obs_dict and pose : {this_data_in}")
             obs_dict_np[key] = this_data_in
     return obs_dict_np
 
