@@ -4,7 +4,8 @@ defaults:
 
 name: real_umi_image_xela_wrench_at_24fps
 
-image_shape: [3, 240, 320]
+# image_shape: [3, 240, 320]
+image_shape: [3, 224, 224]
 dataset_path: data/umi_v1_zarr
 
 shape_meta: &shape_meta

@@ -22,9 +22,9 @@ publisher:
 teleop_server:
   # host_ip: "192.168.2.187"
   # port: 8082
-  host_ip: "10.112.2.37"
-  # host_ip: "127.0.0.1"
-  port: 4242
+  # host_ip: "10.112.2.37"
+  host_ip: "127.0.0.1"
+  port: 4245
   fps: 60
   use_force_control_for_gripper: False
   max_gripper_width: 0.05

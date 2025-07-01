@@ -41,8 +41,8 @@ class ROS2DataConverter:
         self.tactile_camera_digit_topic_name = tactile_camera_digit_topic_name
         self.bridge = CvBridge()
         self.tactile_camera_marker_dimension = tactile_camera_marker_dimension
-        self.xela_taxel_mean = np.load('/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/tactile_normalization_mean.npy')
-        self.xela_taxel_std = np.load('/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/tactile_normalization_std.npy')
+        # self.xela_taxel_mean = np.load('/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/tactile_normalization_mean.npy')
+        # self.xela_taxel_std = np.load('/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/tactile_normalization_std.npy')
 
     def visualize_tcp_poses(self, tcp_pose_left_in_world: np.ndarray, tcp_pose_right_in_world: np.ndarray):
         world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0)
@@ -84,6 +84,7 @@ class ROS2DataConverter:
             # logger.debug("xServTopic found")
             left_tcp_wrench_array, right_tcp_wrench_array = self.decode_xserv_topic(
                 topic_dict['/xServTopic'])
+            # logger.debug(f"left_tcp_wrench_array in ros_data_converter: {left_tcp_wrench_array}")
         else:
             logger.debug("xServTopic not found, using Float32MultiArray")
             # left_tcp_wrench: Float32MultiArray = topic_dict.get('/left_tcp_taxels')
@@ -159,8 +160,8 @@ class ROS2DataConverter:
         left_taxels = np.zeros(16, dtype=np.float32)
         right_taxels = np.zeros(16, dtype=np.float32)
         try:
-            mean = self.xela_taxel_mean  # shape (16,)
-            std = self.xela_taxel_std    # shape (16,)
+            # mean = self.xela_taxel_mean  # shape (16,)
+            # std = self.xela_taxel_std    # shape (16,)
 
             sensors = getattr(msg, 'sensors', [])
             for sensor in sensors:
@@ -170,17 +171,13 @@ class ROS2DataConverter:
                 pad = 16 - len(values)
                 if pad > 0:
                     values.extend([0.0] * pad)
+                array_values = np.array(values,dtype=np.float32)
+                # normed_values = (np.array(values, dtype=np.float32) - mean) / (std + 1e-8)
 
-                normed_values = (np.array(values, dtype=np.float32) - mean) / (std + 1e-8)
-
-                # if getattr(sensor, 'sensor_pos', 0) == 0:
-                #     left_taxels = np.array(values, dtype=np.float32)
-                #     logger.debug(f'Left taxels: {left_taxels}')
-                # else:
-                #     right_taxels = np.array(values, dtype=np.float32)
-                #     logger.debug(f'Right taxels: {right_taxels}')
-                left_taxels = normed_values
-                right_taxels = normed_values
+                # left_taxels = normed_values
+                # right_taxels = normed_values
+                left_taxels = array_values
+                right_taxels = array_values
         except Exception as e:
             logger.warning(f'Failed to decode xServTopic: {e}')
         return left_taxels, right_taxels
@@ -284,7 +281,7 @@ class ROS2DataConverter:
         # logger.debug(f"left_tcp_wrench: {left_tcp_wrench}, right_tcp_wrench: {right_tcp_wrench}")
         sensor_msg_args = {
             'timestamp': latest_timestamp,
-            'leftRobotTCP': left_tcp_pose,
+            'leftRobotTCP': left_tcp_pose, # 6d(pos + euler)
             'rightRobotTCP': right_tcp_pose,
             'leftRobotTCPVel': left_tcp_vel,
             'rightRobotTCPVel': right_tcp_vel,

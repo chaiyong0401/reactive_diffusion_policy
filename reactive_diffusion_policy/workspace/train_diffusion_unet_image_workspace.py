@@ -584,8 +584,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
 
         # resume training
         if cfg.training.resume:
-            lastest_ckpt_path = self.get_checkpoint_path()
-            # lastest_ckpt_path = pathlib.Path("/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/data/outputs/2025.06.18/10.40.13_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0618104011/checkpoints/latest.ckpt")
+            # lastest_ckpt_path = self.get_checkpoint_path()
+            lastest_ckpt_path = pathlib.Path("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/12.12.11_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0626121209/checkpoints/latest.ckpt")
             if lastest_ckpt_path.is_file():
                 accelerator.print(f"Resuming from checkpoint {lastest_ckpt_path}")
                 # print(f"Resuming from checkpoint {lastest_ckpt_path}")
@@ -600,8 +600,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         # normalizer = dataset.get_normalizer()
 
         # compute normalizer on the main process and save to disk
-        normalizer_path = os.path.join(self.output_dir, 'normalizer.pkl')
-        # normalizer_path = os.path.join("/home/dyros-recruit/mcy_ws/reactive_diffusion_policy_umi/data/outputs/2025.06.18/10.40.13_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0618104011","normalizer.pkl")
+        # normalizer_path = os.path.join(self.output_dir, 'normalizer.pkl')
+        normalizer_path = os.path.join("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/12.12.11_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0626121209","normalizer.pkl")
         # if accelerator.is_main_process:
         #     normalizer = dataset.get_normalizer()
         #     print(normalizer.__dict__)
@@ -793,23 +793,23 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 log_data = []
 
                 # run validation
-                # if cfg.task.dataset.val_ratio > 0 and (self.epoch % cfg.training.val_every) == 0 and accelerator.is_main_process:
-                # # if cfg.task.dataset.val_ratio > 0 and (self.epoch % cfg.training.val_every) == 0:
-                #     with torch.no_grad():
-                #         val_losses = list()
-                #         with tqdm.tqdm(val_dataloader, desc=f"Validation epoch {self.epoch}", 
-                #                 leave=False, mininterval=cfg.training.tqdm_interval_sec) as tepoch:
-                #             for batch_idx, batch in enumerate(tepoch):
-                #                 batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
-                #                 loss = self.model(batch)
-                #                 val_losses.append(loss)
-                #                 if (cfg.training.max_val_steps is not None) \
-                #                     and batch_idx >= (cfg.training.max_val_steps-1):
-                #                     break
-                #         if len(val_losses) > 0:
-                #             val_loss = torch.mean(torch.tensor(val_losses)).item()
-                #             # log epoch average validation loss
-                #             step_log['val_loss'] = val_loss
+                if cfg.task.dataset.val_ratio > 0 and (self.epoch % cfg.training.val_every) == 0 and accelerator.is_main_process:
+                # if cfg.task.dataset.val_ratio > 0 and (self.epoch % cfg.training.val_every) == 0:
+                    with torch.no_grad():
+                        val_losses = list()
+                        with tqdm.tqdm(val_dataloader, desc=f"Validation epoch {self.epoch}", 
+                                leave=False, mininterval=cfg.training.tqdm_interval_sec) as tepoch:
+                            for batch_idx, batch in enumerate(tepoch):
+                                batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                                loss = self.model(batch)
+                                val_losses.append(loss)
+                                if (cfg.training.max_val_steps is not None) \
+                                    and batch_idx >= (cfg.training.max_val_steps-1):
+                                    break
+                        if len(val_losses) > 0:
+                            val_loss = torch.mean(torch.tensor(val_losses)).item()
+                            # log epoch average validation loss
+                            step_log['val_loss'] = val_loss
 
                 # run diffusion sampling on a training batch
                 # if (self.epoch % cfg.training.sample_every) == 0:
@@ -859,34 +859,34 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 accelerator.wait_for_everyone()
                 
                 # checkpoint
-                if (self.epoch % cfg.training.checkpoint_every) == 0 and accelerator.is_main_process:
-                # if (self.epoch % cfg.training.checkpoint_every) == 0:
-                    # unwrap the model to save ckpt
-                    model_ddp = self.model
-                    self.model = accelerator.unwrap_model(self.model)
+                # if (self.epoch % cfg.training.checkpoint_every) == 0 and accelerator.is_main_process:
+                # # if (self.epoch % cfg.training.checkpoint_every) == 0:
+                #     # unwrap the model to save ckpt
+                #     model_ddp = self.model
+                #     self.model = accelerator.unwrap_model(self.model)
 
-                    # checkpointing
-                    if cfg.checkpoint.save_last_ckpt:
-                        self.save_checkpoint()
-                    if cfg.checkpoint.save_last_snapshot:
-                        self.save_snapshot()
+                #     # checkpointing
+                #     if cfg.checkpoint.save_last_ckpt:
+                #         self.save_checkpoint()
+                #     if cfg.checkpoint.save_last_snapshot:
+                #         self.save_snapshot()
 
-                    # sanitize metric names
-                    metric_dict = dict()
-                    for key, value in step_log.items():
-                        new_key = key.replace('/', '_')
-                        metric_dict[new_key] = value
+                #     # sanitize metric names
+                #     metric_dict = dict()
+                #     for key, value in step_log.items():
+                #         new_key = key.replace('/', '_')
+                #         metric_dict[new_key] = value
                     
-                    # We can't copy the last checkpoint here
-                    # since save_checkpoint uses threads.
-                    # therefore at this point the file might have been empty!
-                    topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
+                #     # We can't copy the last checkpoint here
+                #     # since save_checkpoint uses threads.
+                #     # therefore at this point the file might have been empty!
+                #     topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
 
-                    if topk_ckpt_path is not None:
-                        self.save_checkpoint(path=topk_ckpt_path)
+                #     if topk_ckpt_path is not None:
+                #         self.save_checkpoint(path=topk_ckpt_path)
 
-                    # recover the DDP model
-                    self.model = model_ddp
+                #     # recover the DDP model
+                #     self.model = model_ddp
                     
                 # ========= eval end for this epoch ==========
                 # policy.train()

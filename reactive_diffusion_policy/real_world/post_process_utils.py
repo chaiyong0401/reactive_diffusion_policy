@@ -14,7 +14,7 @@ class DataPostProcessingManager:
     def __init__(self,
                  transforms: RealWorldTransforms,
                  mode: str = 'single_arm_one_realsense_no_tactile',
-                 image_resize_shape: tuple = (320, 240),
+                 image_resize_shape: tuple = (224, 224),
                  use_6d_rotation: bool = True,
                  marker_dimension: int = 2,
                  pca_param_dict: DictConfig = None,
@@ -40,6 +40,7 @@ class DataPostProcessingManager:
         obs_dict['left_robot_tcp_pose'] = sensor_msg.leftRobotTCP
         obs_dict['left_robot_tcp_vel'] = sensor_msg.leftRobotTCPVel
         obs_dict['left_robot_tcp_wrench'] = sensor_msg.leftRobotTCPWrench
+        # logger.debug(f"left_robot_tcp_wrench in convert_sensor_msg_to_obs_dict: {sensor_msg.leftRobotTCPWrench}")
         obs_dict['left_robot_gripper_width'] = sensor_msg.leftRobotGripperState[0][np.newaxis]
         obs_dict['left_robot_gripper_force'] = sensor_msg.leftRobotGripperState[1][np.newaxis]
 

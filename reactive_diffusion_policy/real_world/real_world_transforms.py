@@ -34,18 +34,18 @@ class RealWorldTransforms:
 
     def __post_init__(self):
         if self.option is not None:
-            with open(osp.join(self.option.calibration_path, 'external_camera_to_left_robot_base_transform.json'), 'r') as f:
-                self.external_camera_to_left_robot_base_transform = np.array(json.load(f))
-            with open(osp.join(self.option.calibration_path, 'external_camera_to_right_robot_base_transform.json'), 'r') as f:
-                self.external_camera_to_right_robot_base_transform = np.array(json.load(f))
-            with open(osp.join(self.option.calibration_path, 'left_wrist_camera_to_left_robot_tcp_transform.json'), 'r') as f:
-                self.left_wrist_camera_to_left_robot_tcp_transform = np.array(json.load(f))
+            # with open(osp.join(self.option.calibration_path, 'external_camera_to_left_robot_base_transform.json'), 'r') as f:
+            #     self.external_camera_to_left_robot_base_transform = np.array(json.load(f))
+            # with open(osp.join(self.option.calibration_path, 'external_camera_to_right_robot_base_transform.json'), 'r') as f:
+            #     self.external_camera_to_right_robot_base_transform = np.array(json.load(f))
+            # with open(osp.join(self.option.calibration_path, 'left_wrist_camera_to_left_robot_tcp_transform.json'), 'r') as f:
+            #     self.left_wrist_camera_to_left_robot_tcp_transform = np.array(json.load(f))
             # with open(osp.join(self.option.calibration_path, 'right_wrist_camera_to_right_robot_tcp_transform.json'), 'r') as f:
             #     self.right_wrist_camera_to_right_robot_tcp_transform = np.array(json.load(f))
-            with open(osp.join(self.option.calibration_path, 'world_to_left_robot_base_transform.json'), 'r') as f:
-                self.world_to_left_robot_base_transform = np.array(json.load(f))
-            with open(osp.join(self.option.calibration_path, 'world_to_right_robot_base_transform.json'), 'r') as f:
-                self.world_to_right_robot_base_transform = np.array(json.load(f))
+            # with open(osp.join(self.option.calibration_path, 'world_to_left_robot_base_transform.json'), 'r') as f:
+            #     self.world_to_left_robot_base_transform = np.array(json.load(f))
+            # with open(osp.join(self.option.calibration_path, 'world_to_right_robot_base_transform.json'), 'r') as f:
+            #     self.world_to_right_robot_base_transform = np.array(json.load(f))
 
             self.world_to_external_camera_transform = (np.linalg.inv(self.external_camera_to_left_robot_base_transform)
                                                        @ self.world_to_left_robot_base_transform)

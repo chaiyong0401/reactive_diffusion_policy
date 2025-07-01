@@ -39,9 +39,12 @@ env_runner:
   tcp_pos_clip_range: # no clip for x, y, clip for z
     - [ -100, -100, 0.13 ]
     - [ 100, 100, 1.0 ]
-  tcp_rot_clip_range: # no clip
-    - [ -3.14159, 0.0, 3.14159 ]
-    - [ -3.14159, 0.0, 3.14159 ]
+  # tcp_rot_clip_range: # no clip, original
+  #   - [ -3.14159, 0.0, 3.14159 ]
+  #   - [ -3.14159, 0.0, 3.14159 ]
+  tcp_rot_clip_range: # no clip, mcy change
+    - [ -1.54159, -1.54, -1.54159 ]
+    - [ 1.54159, 1.54, 1.54159 ]
   latency_step: 4
   gripper_latency_step: 4
   control_fps: 24

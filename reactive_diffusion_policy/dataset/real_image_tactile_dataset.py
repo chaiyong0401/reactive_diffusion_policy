@@ -157,6 +157,7 @@ class RealImageTactileDataset(BaseImageDataset):
         normalizer = LinearNormalizer()
 
         # calculate relative action / obs
+        # not use
         if "left_robot_wrt_right_robot_tcp_pose" in self.lowdim_keys or "right_robot_wrt_left_robot_tcp_pose" in self.lowdim_keys:
             inter_gripper_data_dict = {key: list() for key in self.lowdim_keys if 'robot_tcp_pose' in key and 'wrt' in key}
             for data in tqdm.tqdm(self, leave=False, desc='Calculating inter-gripper relative obs for normalizer'):
@@ -164,14 +165,16 @@ class RealImageTactileDataset(BaseImageDataset):
                     inter_gripper_data_dict[key].append(data['obs'][key])
             inter_gripper_data_dict = dict_apply(inter_gripper_data_dict, np.stack)
 
+        # use
         if self.relative_action:
-            #########################################################
             print(self.lowdim_keys)
             keys_to_collect = [key for key in (self.lowdim_keys + ['action']) if ('robot_tcp_pose' in key and 'wrt' not in key) or 'action' in key]
-            print("✅ relative_data_dict keys to collect:", keys_to_collect)
-            print("Dataset length:", len(self))
+            print("✅ relative_data_dict keys to collect:", keys_to_collect) # left_robot_tcp_pose, action 
+            print("Dataset length:", len(self)) # 25000
             if len(self) == 0:
                 raise RuntimeError("❗ Dataset is empty. No samples to process for normalizer calculation.")
+
+            relative_data_dict = {key: list() for key in (self.lowdim_keys + ['action']) if ('robot_tcp_pose' in key and 'wrt' not in key) or 'action' in key}
 
             print("=== [DEBUG] Sampler length ===")
             print(len(self.sampler))
@@ -191,13 +194,15 @@ class RealImageTactileDataset(BaseImageDataset):
                         print(f"  - {k}: list/tuple, len {len(v)}")
                     else:
                         print(f"  - {k}: {type(v)}, value {v}")
+
             ######################################################
-            relative_data_dict = {key: list() for key in (self.lowdim_keys + ['action']) if ('robot_tcp_pose' in key and 'wrt' not in key) or 'action' in key}
             for data in tqdm.tqdm(self, leave=False, desc='Calculating relative action/obs for normalizer'):
             # for idx in tqdm.tqdm(range(len(self.sampler)), desc='Calculating relative action/obs for normalizer'):
             #     data = self.sampler.sample_sequence(idx)
+
                 for key in relative_data_dict.keys():
                     if key == 'action':
+                        
                         relative_data_dict[key].append(data[key])
                         # print("action:", data[key])
                     else:
@@ -209,9 +214,9 @@ class RealImageTactileDataset(BaseImageDataset):
             
             # data loading check
             for key, arr in relative_data_dict.items():
-                print(f"DEBUG: '{key}' has {len(arr)} samples")
+                print(f"DEBUG: '{key}' has {len(arr)} samples") # left_robot_tcp_pose, action 
 
-            relative_data_dict = dict_apply(relative_data_dict, np.stack)
+            relative_data_dict = dict_apply(relative_data_dict, np.stack) # 25000 tcp_pose, action data dict
 
         # action
         if self.relative_action:
@@ -233,7 +238,7 @@ class RealImageTactileDataset(BaseImageDataset):
                 normalizer[key] = SingleFieldLinearNormalizer.create_fit(
                     self.replay_buffer[key][:, :self.shape_meta['obs'][key]['shape'][0]])
 
-        for key in list(set(self.extended_lowdim_keys)):
+        for key in list(set(self.extended_lowdim_keys)): # no duplicate
             if key in self.lowdim_keys:
                 assert self.shape_meta['extended_obs'][key]['shape'][0] == self.shape_meta['obs'][key]['shape'][0], \
                     f"Extended obs {key} has different shape from obs {key}"
@@ -289,10 +294,10 @@ class RealImageTactileDataset(BaseImageDataset):
                     del data[key]
 
         # inter-gripper relative action
-        obs_dict.update(get_inter_gripper_actions(obs_dict, self.lowdim_keys, self.transforms))
-        for key in ['left_robot_wrt_right_robot_tcp_pose', 'right_robot_wrt_left_robot_tcp_pose']:
-            if key in obs_dict:
-                obs_dict[key] = obs_dict[key][:, :self.shape_meta['obs'][key]['shape'][0]].astype(np.float32)
+        # obs_dict.update(get_inter_gripper_actions(obs_dict, self.lowdim_keys, self.transforms))
+        # for key in ['left_robot_wrt_right_robot_tcp_pose', 'right_robot_wrt_left_robot_tcp_pose']:
+        #     if key in obs_dict:
+        #         obs_dict[key] = obs_dict[key][:, :self.shape_meta['obs'][key]['shape'][0]].astype(np.float32)
         
         extended_obs_dict = dict()
         for key in self.extended_rgb_keys:
@@ -322,7 +327,7 @@ class RealImageTactileDataset(BaseImageDataset):
             action = absolute_actions_to_relative_actions(action, base_absolute_action=base_absolute_action)
             # print("relative action: ", action)
 
-            if self.relative_tcp_obs_for_relative_action:
+            if self.relative_tcp_obs_for_relative_action: #true
                 for key in self.lowdim_keys:
                     if 'robot_tcp_pose' in key and 'wrt' not in key:
                         obs_dict[key]  = absolute_actions_to_relative_actions(obs_dict[key], base_absolute_action=base_absolute_action)

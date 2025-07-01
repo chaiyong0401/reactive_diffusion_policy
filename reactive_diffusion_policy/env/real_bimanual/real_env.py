@@ -216,7 +216,8 @@ class RealRobotEnvironment(Node):
             if 'move' in endpoint:
                 # low-level control commands
                 try:
-                    response = self.session.post(url, json=data, timeout=0.001)
+                    logger.info(f"move tcp in real_env send_command")
+                    response = self.session.post(url, json=data, timeout=1)
                 except requests.exceptions.ReadTimeout:
                     # Ignore the timeout error for low-level control commands to reduce latency
                     # TODO: use a more robust way to handle the timeout error
@@ -391,7 +392,8 @@ class RealRobotEnvironment(Node):
         # obs_buffer에 최근에 들어온 observation(sensor msgs)들을 누적하고 있음 
         last_n_obs_list, _ = self.obs_buffer.peek_last_n(
             obs_steps * temporal_downsample_ratio)  # newest to oldest
-
+        
+        # logger.debug(f"left_tcp_wrench in last_n_obs_list: {last_n_obs_list[['left_robot_tcp_wrench']]}")
         result = dict()
         # Filter out None observations
         last_n_obs_list = [obs for obs in last_n_obs_list if obs is not None]
@@ -413,7 +415,7 @@ class RealRobotEnvironment(Node):
             result[key] = stack_last_n_obs(
                 [obs[key] for obs in downsampled_obs_list], obs_steps)
             # DEBUG
-            # print(f"[get_obs] key: {key}, shape: {result[key].shape}")
+            # logger.info(f"[get_obs] key: {key}, shape: {result[key].shape}")
             # if isinstance(result[key], np.ndarray):
             #     print(f"[get_obs] sample values for {key}:\n{result[key].flatten()[:5]}")
             # else:
@@ -439,13 +441,13 @@ class RealRobotEnvironment(Node):
             'force_limit': self.grasp_force
         })
         logger.info(f"/move_gripper/left : {left_gripper_width_target}")
-        # self.last_gripper_width_target[0] = left_gripper_width_target
+        self.last_gripper_width_target[0] = left_gripper_width_target
         # self.send_command('/move_gripper/right', {
         #     'width': right_gripper_width_target,
         #     'velocity': 10.0,
         #     'force_limit': self.grasp_force
         # })
-        self.last_gripper_width_target[1] = right_gripper_width_target
+        # self.last_gripper_width_target[1] = right_gripper_width_target
 
     def send_gripper_command(self, left_gripper_width_target: float, right_gripper_width_target: float, is_bimanual: bool = False):
         if self.enable_gripper_interval_control and self.start_gripper_interval_control:    # enable_gripper_interval_control이 참이면, gripper_control_time_interval 만큼 지난 경우 제어
@@ -544,8 +546,12 @@ class RealRobotEnvironment(Node):
 
         # print("send_command /move_tcp/left, left_tcp_target_7d_in_robot:", left_tcp_target_7d_in_robot.tolist())
         # self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_7d_in_robot.tolist()})
-        logger.info(f"send_command /move_tcp/left, left_tcp_target_6d_in_robot: {left_tcp_target_6d_in_robot.tolist()}")
-        self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_6d_in_robot.tolist()})
+        left_tcp_6d_robot_list = left_tcp_target_6d_in_robot.tolist()
+        print("type of left_tcp_target_6d_in_robot:", type(left_tcp_target_6d_in_robot))
+        print("type of left_tcp_6d_robot_list:", type(left_tcp_6d_robot_list))
+        logger.info(f"send_command /move_tcp/left, left_tcp_target_6d_in_robot: {left_tcp_6d_robot_list}")
+        self.send_command('/move_tcp/left', {'target_tcp': left_tcp_6d_robot_list})
+
         if is_bimanual:
             self.send_command('/move_tcp/right', {'target_tcp': right_tcp_target_7d_in_robot.tolist()})
 

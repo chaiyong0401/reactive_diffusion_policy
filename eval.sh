@@ -25,5 +25,5 @@ python eval_real_robot_flexiv.py \
       task=real_umi_image_xela_wrench_ldp_24fps \
       +task.env_runner.output_dir=/home/embodied-ai/mcy/reactive_diffusion_policy_umi/saving_video \
       at=at_peel \
-      +ckpt_path="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.18/10.40.13_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0618104011/checkpoints/latest.ckpt" \
-      at_load_dir="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.17/20.55.34_train_vae_real_umi_image_xela_wrench_at_24fps_0617205533/checkpoints/latest.ckpt"
+      +ckpt_path="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/12.12.11_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0626121209/checkpoints/latest.ckpt" \
+      at_load_dir="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/11.04.49_train_vae_real_umi_image_xela_wrench_at_24fps_0626110449/checkpoints/latest.ckpt"
