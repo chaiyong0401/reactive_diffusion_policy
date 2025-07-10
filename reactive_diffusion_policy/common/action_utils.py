@@ -5,6 +5,7 @@ from reactive_diffusion_policy.common.space_utils import (
     pose_3d_9d_to_homo_matrix_batch,
     homo_matrix_to_pose_9d_batch
 )
+from umi.common.pose_util import pose10d_to_mat, mat_to_pose10d
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
 from loguru import logger
 
@@ -64,65 +65,60 @@ def interpolate_actions_with_ratio(actions: np.ndarray, N: int):
     return interpolated_actions
 
 def absolute_actions_to_relative_actions(actions: np.ndarray, base_absolute_action=None):
+
     actions = actions.copy()
     T, D = actions.shape
 
-    if D == 3 or D == 4:  # (x, y, z(, gripper_width))
+    if D == 3 or D == 4:
         tcp_dim_list = [np.arange(3)]
-    elif D == 6 or D == 8:  # (x_l, y_l, z_l, x_r, y_r, z_r(, gripper_width_l, gripper_width_r))
+    elif D == 6 or D == 8:
         tcp_dim_list = [np.arange(3), np.arange(3, 6)]
-    elif D == 9 or D == 10:  # (x, y, z, rx1, rx2, rx3, ry1, ry2, ry3(, gripper_width))
+    elif D == 9 or D == 10:
         tcp_dim_list = [np.arange(9)]
-    elif D == 18 or D == 20:  # (x_l, y_l, z_l, rotation_l, x_r, y_r, z_r, rotation_r(, gripper_width_l, gripper_width_r))
+    elif D == 18 or D == 20:
         tcp_dim_list = [np.arange(9), np.arange(9, 18)]
     else:
         raise NotImplementedError
 
     if base_absolute_action is None:
         base_absolute_action = actions[0].copy()
-    for tcp_dim in tcp_dim_list:
-        assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
-        # logger.debug(f"base_absolute_action_9d: {base_absolute_action}")
-        # logger.debug(f"actions_9d: {actions}")
-        base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
-        # logger.debug(f"##############################################################################")
-        # logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
-        # logger.debug(f"actions: {actions}")
-        # logger.debug(f"actions_mat: {pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
-        # logger.debug(f"relative_mat: {np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
-        actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(
-            actions[:, tcp_dim]))[:, :len(tcp_dim)]
 
+    for tcp_dim in tcp_dim_list:
+        assert len(tcp_dim) in (3, 9), "Only support 3D or 9D tcp pose now"
+        if len(tcp_dim) == 3:
+            actions[:, tcp_dim] = actions[:, tcp_dim] - base_absolute_action[tcp_dim]
+        else:
+            base_mat = pose10d_to_mat(base_absolute_action[tcp_dim])
+            cur_mat = pose10d_to_mat(actions[:, tcp_dim])
+            rel_mat = np.matmul(np.linalg.inv(base_mat), cur_mat)
+            actions[:, tcp_dim] = mat_to_pose10d(rel_mat)
     return actions
 
 def relative_actions_to_absolute_actions(actions: np.ndarray, base_absolute_action: np.ndarray):
+
     actions = actions.copy()
     T, D = actions.shape
 
-    if D == 3 or D == 4:  # (x, y, z(, gripper_width))
+    if D == 3 or D == 4:
         tcp_dim_list = [np.arange(3)]
-    elif D == 6 or D == 8:  # (x_l, y_l, z_l, x_r, y_r, z_r(, gripper_width_l, gripper_width_r))
+    elif D == 6 or D == 8:
         tcp_dim_list = [np.arange(3), np.arange(3, 6)]
-    elif D == 9 or D == 10:  # (x, y, z, rx1, rx2, rx3, ry1, ry2, ry3(, gripper_width))
+    elif D == 9 or D == 10:
         tcp_dim_list = [np.arange(9)]
-    elif D == 18 or D == 20:  # (x_l, y_l, z_l, rotation_l, x_r, y_r, z_r, rotation_r(, gripper_width_l, gripper_width_r))
+    elif D == 18 or D == 20:
         tcp_dim_list = [np.arange(9), np.arange(9, 18)]
     else:
         raise NotImplementedError
 
     for tcp_dim in tcp_dim_list:
-        assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
-        base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
-        logger.debug(f"######################relative to absolute########################################################")
-        logger.debug(f"base_tcp_action: {base_absolute_action}")
-        logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
-        logger.debug(f"actions: {actions}")
-        # actions[:, tcp_dim[:3]] *= -1 # 07/07
-        # logger.debug(f"actions: {actions}")
-        actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(base_tcp_pose_mat @ pose_3d_9d_to_homo_matrix_batch(
-            actions[:, tcp_dim]))[:, :len(tcp_dim)]
-        logger.debug(f"actions: {actions}")
-
+        assert len(tcp_dim) in (3, 9), "Only support 3D or 9D tcp pose now"
+        if len(tcp_dim) == 3:
+            actions[:, tcp_dim] = actions[:, tcp_dim] + base_absolute_action[tcp_dim]
+        else:
+            base_mat = pose10d_to_mat(base_absolute_action[tcp_dim])
+            cur_mat = pose10d_to_mat(actions[:, tcp_dim])
+            abs_mat = np.matmul(base_mat, cur_mat)
+            actions[:, tcp_dim] = mat_to_pose10d(abs_mat)
     return actions
 
 def get_inter_gripper_actions(obs_dict, lowdim_keys: dict, transforms: RealWorldTransforms):
