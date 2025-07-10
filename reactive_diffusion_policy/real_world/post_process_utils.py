@@ -39,15 +39,17 @@ class DataPostProcessingManager:
         # Add independent key-value pairs for left robot
         obs_dict['left_robot_tcp_pose'] = sensor_msg.leftRobotTCP
         obs_dict['left_robot_tcp_vel'] = sensor_msg.leftRobotTCPVel
-        obs_dict['left_robot_tcp_wrench'] = sensor_msg.leftRobotTCPWrench
-        # logger.debug(f"left_robot_tcp_wrench in convert_sensor_msg_to_obs_dict: {sensor_msg.leftRobotTCPWrench}")
+        # obs_dict['left_robot_tcp_wrench'] = sensor_msg.leftRobotTCPWrench   
+        wrench_indices = [0, 3, 5, 10, 12, 15]  # 07/05 obs tactile 6
+        obs_dict['left_robot_tcp_wrench'] = sensor_msg.leftRobotTCPWrench[wrench_indices]
         obs_dict['left_robot_gripper_width'] = sensor_msg.leftRobotGripperState[0][np.newaxis]
         obs_dict['left_robot_gripper_force'] = sensor_msg.leftRobotGripperState[1][np.newaxis]
 
         # Add independent key-value pairs for right robot
         obs_dict['right_robot_tcp_pose'] = sensor_msg.rightRobotTCP
         obs_dict['right_robot_tcp_vel'] = sensor_msg.rightRobotTCPVel
-        obs_dict['right_robot_tcp_wrench'] = sensor_msg.rightRobotTCPWrench
+        # obs_dict['right_robot_tcp_wrench'] = sensor_msg.rightRobotTCPWrench
+        obs_dict['right_robot_tcp_wrench'] = sensor_msg.rightRobotTCPWrench[wrench_indices] # 07/05 obs tactile 6
         obs_dict['right_robot_gripper_width'] = sensor_msg.rightRobotGripperState[0][np.newaxis]
         obs_dict['right_robot_gripper_force'] = sensor_msg.rightRobotGripperState[1][np.newaxis]
 
@@ -76,6 +78,7 @@ class DataPostProcessingManager:
             return obs_dict
 
         obs_dict['left_wrist_img'] = self.resize_image_by_size(sensor_msg.leftWristCameraRGB, size=self.resize_shape)
+        # visualize_rgb_image(obs_dict['left_wrist_img'])
         if self.debug:
             visualize_rgb_image(obs_dict['left_wrist_img'])
         if self.mode == SensorMode.single_arm_two_realsense_no_tactile:

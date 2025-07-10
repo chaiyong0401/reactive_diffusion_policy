@@ -36,6 +36,8 @@ class RealImageTactileDataset(BaseImageDataset):
                  relative_action=False,
                  relative_tcp_obs_for_relative_action=True,
                  transform_params=None,
+                 use_constant_rgb: bool = False,    # 07/07
+                 constant_rgb_value: float = 0.5,   # 07/07
                  ):
         print("realimgaetactiledataset")
         print(dataset_path)
@@ -93,6 +95,8 @@ class RealImageTactileDataset(BaseImageDataset):
         self.relative_action = relative_action
         self.relative_tcp_obs_for_relative_action = relative_tcp_obs_for_relative_action
         self.transforms = RealWorldTransforms(option=transform_params)
+        self.use_constant_rgb = use_constant_rgb
+        self.constant_rgb_value = constant_rgb_value
 
         key_first_k = dict()
         if n_obs_steps is not None:
@@ -234,6 +238,9 @@ class RealImageTactileDataset(BaseImageDataset):
                 normalizer[key] = get_action_normalizer(inter_gripper_data_dict[key])
             elif 'robot_tcp_pose' in key and 'wrt' not in key:
                 normalizer[key] = get_action_normalizer(self.replay_buffer[key][:, :self.shape_meta['obs'][key]['shape'][0]])
+            elif 'robot_tcp_wrench' in key:  # ✅ 여기에 추가
+                normalizer[key] = get_action_normalizer(
+                    self.replay_buffer[key][:, :self.shape_meta['obs'][key]['shape'][0]])
             else:
                 normalizer[key] = SingleFieldLinearNormalizer.create_fit(
                     self.replay_buffer[key][:, :self.shape_meta['obs'][key]['shape'][0]])
@@ -249,6 +256,9 @@ class RealImageTactileDataset(BaseImageDataset):
                     normalizer[key] = get_action_normalizer(inter_gripper_data_dict[key])
                 elif 'robot_tcp_pose' in key and 'wrt' not in key: # not used now
                     normalizer[key] = get_action_normalizer(self.replay_buffer[key][:, :self.shape_meta['extended_obs'][key]['shape'][0]])
+                elif 'robot_tcp_wrench' in key:  # ✅ 여기에 추가
+                    normalizer[key] = get_action_normalizer(
+                        self.replay_buffer[key][:, :self.shape_meta['obs'][key]['shape'][0]])
                 else:
                     normalizer[key] = SingleFieldLinearNormalizer.create_fit(
                         self.replay_buffer[key][:, :self.shape_meta['extended_obs'][key]['shape'][0]])
@@ -281,7 +291,11 @@ class RealImageTactileDataset(BaseImageDataset):
             # T,H,W,C
             # convert uint8 image to float32
             obs_dict[key] = np.moveaxis(data[key][T_slice][::-obs_downsample_ratio][::-1],-1,1
-                ).astype(np.float32) / 255.
+                ).astype(np.float32) / 255.0
+            # logger.info(f"obs_dict_ before constant_rgb: {obs_dict[key[...]]}")
+            if self.use_constant_rgb:   # 07/07
+                obs_dict[key][...] = self.constant_rgb_value
+                # logger.info(f"obs_dict_with constant_rgb: {obs_dict[key[...]]}")
             # T,C,H,W
             # save ram
             if key not in self.rgb_keys:
@@ -302,7 +316,9 @@ class RealImageTactileDataset(BaseImageDataset):
         extended_obs_dict = dict()
         for key in self.extended_rgb_keys:
             extended_obs_dict[key] = np.moveaxis(data[key],-1,1
-                ).astype(np.float32) / 255.
+                ).astype(np.float32) / 255.0
+            if self.use_constant_rgb:   # 07/07
+                obs_dict[key][...] = self.constant_rgb_value
             del data[key]
         for key in self.extended_lowdim_keys:
             if 'wrt' not in key:
@@ -314,7 +330,9 @@ class RealImageTactileDataset(BaseImageDataset):
         # observations are already taken care of by T_slice
         if self.n_latency_steps > 0:
             action = action[self.n_latency_steps:]
-            print("action: ", action)
+            # print("action: ", action)
+            for key in extended_obs_dict:
+                extended_obs_dict[key] = extended_obs_dict[key][self.n_latency_steps:]
         
         if self.relative_action:
             base_absolute_action = np.concatenate([

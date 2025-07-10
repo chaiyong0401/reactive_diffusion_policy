@@ -4,8 +4,8 @@ from dynamixel_sdk import PortHandler, PacketHandler
 # from std_msgs.msg import Float32
 
 # Motor and communication settings
-# DEVICENAME = "/dev/ttyUSB0"
-DEVICENAME = "/dev/ttyUSB2"
+DEVICENAME = "/dev/ttyUSB0"
+# DEVICENAME = "/dev/ttyUSB2"
 PROTOCOL_VERSION = 2
 BAUDRATE = 57600
 

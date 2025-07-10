@@ -1,11 +1,14 @@
 from typing import Dict, Callable, Tuple
 import numpy as np
 from reactive_diffusion_policy.common.cv2_util import get_image_transform
+from loguru import logger
 
 def get_real_obs_dict(
         env_obs: Dict[str, np.ndarray], 
         shape_meta: dict,
-        is_extended_obs: bool = False
+        is_extended_obs: bool = False,
+        use_constant_rgb: bool = False, # 07/07 
+        constant_rgb_value: float = 0.5  # 07/07
         ) -> Dict[str, np.ndarray]:
     obs_dict_np = dict()
     if is_extended_obs:
@@ -30,7 +33,11 @@ def get_real_obs_dict(
                 if this_imgs_in.dtype == np.uint8:
                     out_imgs = out_imgs.astype(np.float32) / 255
             # THWC to TCHW
-            obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
+            # obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
+            obs_dict_np[key] = np.moveaxis(out_imgs, -1, 1) # 07/07
+            logger.info(f"get_real_obs_dict_rgb_size: {obs_dict_np[key].shape}")
+            if use_constant_rgb:
+                obs_dict_np[key][...] = constant_rgb_value
         elif type == 'low_dim':
             if "wrt" in key:
                 continue

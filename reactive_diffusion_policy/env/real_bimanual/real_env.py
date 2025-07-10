@@ -154,6 +154,8 @@ class RealRobotEnvironment(Node):
                 else:
                     if "external_camera" in topic:
                         depth_camera_rgb_topic_names[0] = topic
+                    elif "gopro_camera" in topic:
+                        depth_camera_rgb_topic_names[0] = topic
                     elif "left_wrist_camera" in topic:
                         depth_camera_rgb_topic_names[1] = topic
                     elif "right_wrist_camera" in topic:
@@ -287,6 +289,7 @@ class RealRobotEnvironment(Node):
 
         # this part takes about 10ms - 15ms for now (~5000 points per pcd)
         # this part takes about 3ms (with RGB only) for now
+        # logger.info(f"topic_dict keys: {topic_dict.keys()}")
         sensor_msg: SensorMessage = self.data_converter.convert_all_data(topic_dict)
 
         # convert sensor msg to obs dict
@@ -427,7 +430,7 @@ class RealRobotEnvironment(Node):
         # find out the latency compared to current time
         latency = current_timestamp - downsampled_obs_list[-1]['timestamp'][0]
         # the overall latency is approximately 20ms - 70ms (max 110ms) (~5000 points per pcd)
-        logger.debug(f"Overall latency for get_obs() : {latency:.4f} seconds")
+        # logger.debug(f"Overall latency for get_obs() : {latency:.4f} seconds")
 
         return result
 
@@ -547,8 +550,8 @@ class RealRobotEnvironment(Node):
         # print("send_command /move_tcp/left, left_tcp_target_7d_in_robot:", left_tcp_target_7d_in_robot.tolist())
         # self.send_command('/move_tcp/left', {'target_tcp': left_tcp_target_7d_in_robot.tolist()})
         left_tcp_6d_robot_list = left_tcp_target_6d_in_robot.tolist()
-        print("type of left_tcp_target_6d_in_robot:", type(left_tcp_target_6d_in_robot))
-        print("type of left_tcp_6d_robot_list:", type(left_tcp_6d_robot_list))
+        # print("type of left_tcp_target_6d_in_robot:", type(left_tcp_target_6d_in_robot))
+        # print("type of left_tcp_6d_robot_list:", type(left_tcp_6d_robot_list))
         logger.info(f"send_command /move_tcp/left, left_tcp_target_6d_in_robot: {left_tcp_6d_robot_list}")
         self.send_command('/move_tcp/left', {'target_tcp': left_tcp_6d_robot_list})
 

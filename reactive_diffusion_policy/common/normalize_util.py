@@ -261,6 +261,9 @@ def get_action_normalizer(actions: np.ndarray, temporally_independent_normalizat
         normalizers.append(get_identity_normalizer_from_stat(array_to_stats(actions[...,12:18])))
         if D == 20:
             normalizers.append(get_range_normalizer_from_stat(array_to_stats(actions[...,18:])))
+    elif D == 16:   # tactile
+        normalizers = []
+        normalizers.append(get_range_normalizer_from_stat(array_to_stats(actions[...,:16])))
     else:
         raise NotImplementedError
 

@@ -13,6 +13,8 @@ from reactive_diffusion_policy.model.vae.model import VAE
 from reactive_diffusion_policy.model.common.normalizer import LinearNormalizer
 from reactive_diffusion_policy.common.pytorch_util import dict_apply
 
+from loguru import logger
+
 class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
     def __init__(self,
                  at: VAE,
@@ -94,19 +96,29 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         """
         obs_dict: must include "obs" key
         result: must include "action" key
-        return_latent_action = True 이면, 
-        action_pred = [B, original_horizon, latent_dim], original_horizon(action chunk 길이: 10)
-        action = [B, n_action_steps, latent_dim]
+        return_latent_action = True case in mcy
+        
+        rdp 에서는 latent 반환 하는 용도로만 사용
         """
         assert 'past_action' not in obs_dict  # not implemented yet
         # normalize input
         nobs = self.normalizer.normalize(obs_dict)  # 정규화된 obs
+        logger.debug(f"normalized observation:{nobs}")
+        logger.debug(f"Pixel value at [0, 0, 100, 100]: {nobs['left_wrist_img'][0, 0, 0, 100, 100]}")
+        logger.debug(f"Pixel value at [0, 0, 50, 50]: {nobs['left_wrist_img'][0, 0, 0, 50, 50]}")
+        logger.debug(f"Pixel value at [0, 0, 150, 150]: {nobs['left_wrist_img'][0, 0, 0, 150, 150]}")
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
         T = self.horizon
         Da = self.action_dim
         Do = self.obs_feature_dim
         To = self.n_obs_steps
+        logger.info(f"B = {B}") # 1
+        logger.info(f"To = {To}")   #2
+        logger.info(f"self.horizon = {T}")  # 8
+        logger.info(f"action_dim = {Da}")   # 16
+        logger.info(f"obs_feature_dim = {Do}")  # 538
+        logger.info(f"n_obs_steps = {To}")  #   2
 
         # build input
         device = self.device
@@ -119,6 +131,7 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
             # condition through global feature
             this_nobs = dict_apply(nobs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:]))
             nobs_features = self.obs_encoder(this_nobs)
+            # logger.debug(f"nobs_features= {nobs_features}")
             # reshape back to B, Do
             global_cond = nobs_features.reshape(B, -1)
             # empty data for action
@@ -136,11 +149,13 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
             global_cond=global_cond,
             **self.kwargs)
         # unnormalize prediction
+        # logger.info(f"nlatent_sample = {nlatent_sample}") # tensor(8,16)
         nlatent_sample = self.normalizer['latent_action'].unnormalize(nlatent_sample)
-
+        # logger.info(f"nlatent_sample_unomalize = {nlatent_sample}") # (8,16)
         # decode latent action
         # note: handle latent action correctly
-        nlatent_sample = einops.rearrange(nlatent_sample, 'N T A -> N (T A)')
+        nlatent_sample = einops.rearrange(nlatent_sample, 'N T A -> N (T A)') # (8x16)
+        # logger.info(f"nlatent_sample_rearrange = {nlatent_sample}")
         
         # latent action VQ(양자화) 사용 여부, VQ: latent space를 고정된 크기의 codebook을 사용해 압축하여 정보 압축
         if self.at.use_vq:
@@ -154,27 +169,32 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
 
         if return_latent_action:
             action_pred = state_vq.unsqueeze(1).expand(-1, self.original_horizon, -1)
-        else:
+            # logger.debug(f"latent_action_pred: {action_pred}")
+        else:   # not use in latent pred (mcy)
             if self.at.use_rnn_decoder:
                 temporal_cond = self.at.get_temporal_cond(extended_obs_dict)
                 temporal_cond = temporal_cond.to(self.device)
                 nsample = self.at.get_action_from_latent_with_temporal_cond(state_vq, temporal_cond)
+                logger.debug(f"nsample at get action: {nsample}")
             else:
                 nsample = self.at.get_action_from_latent(state_vq)
 
             # unnormalize action
             naction_pred = nsample[..., :Da]
             action_pred = self.normalizer['action'].unnormalize(naction_pred)
+            # logger.debug(f"real_latent_action_pred: {action_pred}")
 
         # hack: align with the training process
         To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio # (2*1)
         # get action
-        start = To - 1 # (2-1)
+        start = To - 1 # (3)
+        logger.info(f"start = {start}")
         # hack
-        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1  # (10 - 2*1 +1)
-        end = start + n_action_steps # 10
-        action = action_pred[:, start:end]
-
+        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1  
+        end = start + n_action_steps # 32
+        logger.info(f"end = {end}")
+        action = action_pred[:, start:end] #(32,29) # 동일한 latent(32dim) 29개
+        # logger.debug(f"action = {action}")
         result = {
             'action': action,
             'action_pred': action_pred

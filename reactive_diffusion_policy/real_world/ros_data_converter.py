@@ -122,9 +122,19 @@ class ROS2DataConverter:
                 left_tcp_wrench_array, right_tcp_wrench_array, left_gripper_state_array, right_gripper_state_array)
     
     def decode_depth_rgb_image(self, msg: Image) -> np.ndarray:
+
+        try:
+            color_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            return color_image
+        except Exception as e:
+            logger.warning(f"cv_bridge failed: {e}")
+            return None
         # Decode the image from JPEG format
-        np_arr = np.frombuffer(msg.data, np.uint8)
-        color_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # np_arr = np.frombuffer(msg.data, np.uint8)
+        # logger.debug(f"decode_depth_rgb_image(gopro): min={np_arr.min()}, max={np_arr.max()}")  #min: 0, max: 255
+        # color_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # if color_image is None:
+        #     logger.warning("cv2.imdecode failed: returned None")
         
         return color_image
 
@@ -159,6 +169,11 @@ class ROS2DataConverter:
         """Decode tactile forces from custom Xela sensor message."""
         left_taxels = np.zeros(16, dtype=np.float32)
         right_taxels = np.zeros(16, dtype=np.float32)
+        offset = np.array([
+            -27.0, 21.0, 3.0, 0.0, -7.0, -17.0, -12.0, -19.0,
+            -15.0, 3.0, 2.0, 1.0, 9.0, 2.0, 20.0, -7.0
+        ], dtype=np.float32)
+
         try:
             # mean = self.xela_taxel_mean  # shape (16,)
             # std = self.xela_taxel_std    # shape (16,)
@@ -173,11 +188,11 @@ class ROS2DataConverter:
                     values.extend([0.0] * pad)
                 array_values = np.array(values,dtype=np.float32)
                 # normed_values = (np.array(values, dtype=np.float32) - mean) / (std + 1e-8)
-
+                corrected_values = array_values + offset
                 # left_taxels = normed_values
                 # right_taxels = normed_values
-                left_taxels = array_values
-                right_taxels = array_values
+                left_taxels = corrected_values
+                right_taxels = corrected_values
         except Exception as e:
             logger.warning(f'Failed to decode xServTopic: {e}')
         return left_taxels, right_taxels
@@ -192,12 +207,20 @@ class ROS2DataConverter:
         rgb_image_list = []
         for idx, topic_name in enumerate(self.depth_camera_rgb_topic_names):
             if topic_name is not None:
-                if self.debug:
-                    logger.debug(topic_name)
+                # if self.debug:
+                    # logger.debug(topic_name)
                 assert topic_name in topic_dict, f"Topic {topic_name} not found in topic_dict"
                 rgb_image_list.append(self.decode_depth_rgb_image(topic_dict[topic_name]))
             else:
                 rgb_image_list.append(None)
+
+        # logger.debug(f"rgb_image_list length: {len(rgb_image_list)}")
+
+        # for i, img in enumerate(rgb_image_list):
+        #     if img is None:
+        #         logger.debug(f"rgb_image_list[{i}] is None")
+        #     else:
+        #         logger.debug(f"[depth_camera_rgb_list[{i}]] dtype: {img.dtype}, min: {img.min()}, max: {img.max()}")
 
         return point_cloud_list, rgb_image_list
 
@@ -291,18 +314,22 @@ class ROS2DataConverter:
             'rightRobotGripperState': right_gripper_state,
         }
 
-        if depth_camera_pointcloud_list[0] is not None:
-            sensor_msg_args['externalCameraPointCloud'] = depth_camera_pointcloud_list[0]
+        # if depth_camera_pointcloud_list[0] is not None:
+        #     sensor_msg_args['externalCameraPointCloud'] = depth_camera_pointcloud_list[0]
+        # if depth_camera_rgb_list[0] is not None:
+        #     sensor_msg_args['externalCameraRGB'] = depth_camera_rgb_list[0]
+        # if depth_camera_pointcloud_list[1] is not None:
+        #     sensor_msg_args['leftWristCameraPointCloud'] = depth_camera_pointcloud_list[1]
+        # if depth_camera_rgb_list[1] is not None:
+        #     sensor_msg_args['leftWristCameraRGB'] = depth_camera_rgb_list[1]
+        # if depth_camera_pointcloud_list[2] is not None:
+        #     sensor_msg_args['rightWristCameraPointCloud'] = depth_camera_pointcloud_list[2]
+        # if depth_camera_rgb_list[2] is not None:
+        #     sensor_msg_args['rightWristCameraRGB'] = depth_camera_rgb_list[2]
+
+       
         if depth_camera_rgb_list[0] is not None:
-            sensor_msg_args['externalCameraRGB'] = depth_camera_rgb_list[0]
-        if depth_camera_pointcloud_list[1] is not None:
-            sensor_msg_args['leftWristCameraPointCloud'] = depth_camera_pointcloud_list[1]
-        if depth_camera_rgb_list[1] is not None:
-            sensor_msg_args['leftWristCameraRGB'] = depth_camera_rgb_list[1]
-        if depth_camera_pointcloud_list[2] is not None:
-            sensor_msg_args['rightWristCameraPointCloud'] = depth_camera_pointcloud_list[2]
-        if depth_camera_rgb_list[2] is not None:
-            sensor_msg_args['rightWristCameraRGB'] = depth_camera_rgb_list[2]
+            sensor_msg_args['leftWristCameraRGB'] = depth_camera_rgb_list[0]
         
         if tactile_camera_rgb_list[0] is not None:
             sensor_msg_args['leftGripperCameraRGB1'] = tactile_camera_rgb_list[0]

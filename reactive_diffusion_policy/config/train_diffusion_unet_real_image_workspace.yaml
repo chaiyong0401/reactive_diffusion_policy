@@ -12,7 +12,7 @@ exp_name: "default"
 horizon: 16
 n_obs_steps: 2
 n_action_steps: 8
-n_latency_steps: 0
+n_latency_steps: 2 # 07/08
 dataset_obs_steps: ${n_obs_steps}
 past_action_visible: False
 keypoint_visible_rate: 1.0

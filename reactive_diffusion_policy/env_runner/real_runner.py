@@ -82,10 +82,13 @@ class RealRunner:
                  inference_fps: float = 6,
                  latency_step: int = 0,
                  gripper_latency_step: Optional[int] = None,
+                 command_latency_step: int = 20,
                  n_obs_steps: int = 2,  # 몇 개의 시점을 stack할지
                  obs_temporal_downsample_ratio: int = 2,    # obs 샘플간 간격 [02, 04,..]
                  dataset_obs_temporal_downsample_ratio: int = 1,
                  downsample_extended_obs: bool = True,
+                 use_constant_rgb: bool = False,    # 07/07
+                 constant_rgb_value: float = 1.0,   # 07/07
                  enable_video_recording: bool = False,
                  vcamera_server_ip: Optional[Union[str, ListConfig]] = None,
                  vcamera_server_port: Optional[Union[int, ListConfig]] = None,
@@ -143,6 +146,11 @@ class RealRunner:
         assert self.control_fps % self.inference_fps == 0
         self.latency_step = latency_step
         self.gripper_latency_step = gripper_latency_step if gripper_latency_step is not None else latency_step
+        self.command_latency_step = command_latency_step
+        self.tcp_action_buffer: list = []
+        self.gripper_action_buffer: list = []
+        self.use_constant_rgb = use_constant_rgb
+        self.constant_rgb_value = constant_rgb_value
         self.n_obs_steps = n_obs_steps
         self.obs_temporal_downsample_ratio = obs_temporal_downsample_ratio
         self.dataset_obs_temporal_downsample_ratio = dataset_obs_temporal_downsample_ratio
@@ -177,6 +185,9 @@ class RealRunner:
 
         self.stop_event = threading.Event()
         self.session = requests.Session()
+        self.executed_tcp_action_log_path: Optional[str] = None
+        self.relative_tcp_action_log_path: Optional[str] = None
+        self.latency_tcp_action_log_path: Optional[str] = None
 
     @staticmethod
     def spin_executor(executor):
@@ -221,7 +232,6 @@ class RealRunner:
         # convert absolute action to relative action -> not use in mcy
         # now in extended_lowdim_keys = left_gripper1_marker_offset_emb
         if self.use_relative_action and self.use_relative_tcp_obs_for_relative_action:
-            logger.info(f"use self.use relative action")
             for key in self.extended_lowdim_keys:
                 if 'robot_tcp_pose' in key and 'wrt' not in key:
                     base_absolute_action = extended_obs_dict[key][-1].copy()
@@ -333,7 +343,7 @@ class RealRunner:
             if tcp_step_action is None or gripper_step_action is None:  # no action in the buffer => no movement.
                 cur_time = time.time()
                 precise_sleep(max(0., self.control_interval_time - (cur_time - start_time)))
-                logger.debug(f"Step: {self.action_step_count}, control_interval_time: {self.control_interval_time}, "
+                logger.debug(f"action_Step: {self.action_step_count}, tcp_step_action in None, control_interval_time: {self.control_interval_time}, "
                              f"cur_time-start_time: {cur_time - start_time}")
                 self.action_step_count += 1
                 continue
@@ -363,8 +373,9 @@ class RealRunner:
                     logger.info(f"gripper_step_action in action_thread(32d, latent): {gripper_step_action}") # 32d (same = tcp_step_action)
 
                 np_extended_obs_dict = dict(extended_obs)
-                np_extended_obs_dict = get_real_obs_dict(
-                    env_obs=np_extended_obs_dict, shape_meta=self.shape_meta, is_extended_obs=True)
+                # np_extended_obs_dict = get_real_obs_dict(env_obs=np_extended_obs_dict, shape_meta=self.shape_meta, is_extended_obs=True)
+                np_extended_obs_dict = get_real_obs_dict(env_obs=np_extended_obs_dict, shape_meta=self.shape_meta,is_extended_obs=True, use_constant_rgb=self.use_constant_rgb, constant_rgb_value=self.constant_rgb_value) # 07/07
+                logger.info(f"np_extended_obs_dict_keys: {np_extended_obs_dict.keys()}") # left_robot_tcp_wrench
                 np_extended_obs_dict, _ = self.pre_process_extended_obs(np_extended_obs_dict)
                 extended_obs_dict = dict_apply(np_extended_obs_dict, lambda x: torch.from_numpy(x).unsqueeze(0))
 
@@ -374,12 +385,19 @@ class RealRunner:
                 dataset_obs_temporal_downsample_ratio = self.dataset_obs_temporal_downsample_ratio
                 tcp_step_action = policy.predict_from_latent_action(tcp_step_latent_action, extended_obs_dict, tcp_extended_obs_step, dataset_obs_temporal_downsample_ratio)['action'][0].detach().cpu().numpy()
                 gripper_step_action = policy.predict_from_latent_action(gripper_step_latent_action, extended_obs_dict, gripper_extended_obs_step, dataset_obs_temporal_downsample_ratio)['action'][0].detach().cpu().numpy()
+                if self.relative_tcp_action_log_path is not None:   # "episode_{episode_idx}_relative_tcp_step_actions.txt"
+                    timestamp = time.time()
+                    with open(self.relative_tcp_action_log_path, "a") as f:
+                        f.write(f"{self.action_step_count},{timestamp},{tcp_step_action.tolist()}\n")
+                ## relative_tcp_action 
                 if self.use_relative_action:
-                    logger.debug(f"tcp_step_action(relative) in action_thread(real): {tcp_step_action}")
+                    # logger.debug(f"tcp_step_action(relative) in action_thread(real): {tcp_step_action}")
+                    # logger.debug(f"gripper_step_action(relative) in action_thread(real): {gripper_step_action}")
                     # logger.debug(f"tcp_base_absolute_action: {tcp_base_absolute_action}")
                     tcp_step_action = relative_actions_to_absolute_actions(tcp_step_action, tcp_base_absolute_action)
                     gripper_step_action = relative_actions_to_absolute_actions(gripper_step_action, gripper_base_absolute_action)
-                    logger.debug(f"tcp_step_action(absolute) in action_thread: {tcp_step_action}")
+                    # logger.debug(f"tcp_step_action(absolute) in action_thread: {tcp_step_action}")
+                    # logger.debug(f"gripper_step_action(absolute) in action thread: {gripper_step_action}")
 
                 if tcp_step_action.shape[-1] == 4: # (x, y, z, gripper_width)
                     tcp_len = 3
@@ -391,9 +409,9 @@ class RealRunner:
                     tcp_len = 18
                 else:
                     raise NotImplementedError
-                logger.debug(f"tcp_len = {tcp_len}") # 9
-                logger.debug(f"tcp_step_action_shape: {tcp_step_action.shape[-1]}") # 10
-                if self.env.enable_exp_recording:
+                # logger.debug(f"tcp_len = {tcp_len}") # 9
+                # logger.debug(f"tcp_step_action_shape: {tcp_step_action.shape[-1]}") # 10
+                if self.env.enable_exp_recording: # not used
                     self.env.get_predicted_action(tcp_step_action[:, :tcp_len], type='partial_tcp')
                     self.env.get_predicted_action(gripper_step_action[:, tcp_len:], type='partial_gripper')
 
@@ -412,6 +430,25 @@ class RealRunner:
                 tcp_step_action = tcp_step_action[:tcp_len]
                 gripper_step_action = gripper_step_action[tcp_len:]
 
+            # add action latency buffering
+            # self.tcp_action_buffer.append(tcp_step_action)
+            # self.gripper_action_buffer.append(gripper_step_action)
+            # if len(self.tcp_action_buffer) <= self.command_latency_step:
+            #     cur_time = time.time()
+            #     precise_sleep(max(0., self.control_interval_time - (cur_time - start_time)))
+            #     logger.debug(
+            #         f"Step: {self.action_step_count}, waiting for latency buffer, size={len(self.tcp_action_buffer)}"
+            #     )
+            #     self.action_step_count += 1
+            #     continue
+            # tcp_step_action = self.tcp_action_buffer.pop(0)
+            # gripper_step_action = self.gripper_action_buffer.pop(0)
+
+            if self.executed_tcp_action_log_path is not None:   # "episode_{episode_idx}_tcp_step_actions.txt"
+                    timestamp = time.time()
+                    with open(self.executed_tcp_action_log_path, "a") as f:
+                        f.write(f"{self.action_step_count},{timestamp},{tcp_step_action.tolist()}\n")
+
             combined_action = np.concatenate([tcp_step_action, gripper_step_action], axis=-1)
             # convert to 16-D robot action (TCP(left,right 6D) + gripper of both arms(left, right gripper width, force))
             # TODO: handle rotation in temporal ensemble buffer!
@@ -422,12 +459,12 @@ class RealRunner:
 
             # send action to the robot
             print("excute_action")
-            logger.info(f"step action = {step_action}")
+            logger.info(f"{self.action_step_count} step action = {step_action}")
             self.env.execute_action(step_action, use_relative_action=False, is_bimanual=is_bimanual) # env.excute_action에 use_relative_action 정의 안됨
-            # with open(tcp_pose_log_path, 'a') as f:
-            #                         f.write(f"{step_count},{np_absolute_obs_dict['left_robot_tcp_pose'][-1]}\n")
+                
             cur_time = time.time()
             precise_sleep(max(0., self.control_interval_time - (cur_time - start_time)))
+            # action_count += 1
             self.action_step_count += 1
 
     def start_record_video(self, video_path):
@@ -471,7 +508,17 @@ class RealRunner:
                 logger.info(f"Start evaluation episode {episode_idx}")
                 # ask user whether the environment resetting is done
                 tcp_pose_log_path = osp.join(self.video_dir, f"episode_{episode_idx}_tcp_pose.txt")
-                action_log_path = osp.join(self.video_dir, f"episode_{episode_idx}_executed_actions.txt")
+                latent_log_path = osp.join(self.video_dir, f"episode_{episode_idx}_latent_actions.txt")
+                wrench_log_path = osp.join(self.video_dir, f"episode_{episode_idx}_tcp_wrench.txt")
+                self.executed_tcp_action_log_path = osp.join(
+                    self.video_dir, f"episode_{episode_idx}_tcp_step_actions.txt"
+                )
+                self.relative_tcp_action_log_path = osp.join(
+                    self.video_dir, f"episode_{episode_idx}_relative_tcp_step_actions.txt"
+                )
+                self.latency_tcp_action_log_path = osp.join(
+                    self.video_dir, f"episode_{episode_idx}_latency_tcp_step_actions.txt"
+                )
                 reset_flag = py_cli_interaction.parse_cli_bool('Has the environment reset finished?', default_value=True)
                 if not reset_flag:
                     logger.warning("Skip this episode.")
@@ -487,6 +534,9 @@ class RealRunner:
                 policy.reset()
                 self.tcp_ensemble_buffer.clear()
                 self.gripper_ensemble_buffer.clear()
+                self.tcp_action_buffer.clear()
+                self.gripper_action_buffer.clear()
+
                 logger.debug("Reset environment and policy.")
 
                 if self.enable_video_recording:
@@ -503,156 +553,185 @@ class RealRunner:
 
                 self.action_step_count = 0
                 step_count = 0
-                steps_per_inference = int(self.control_fps / self.inference_fps)    # 12 / 6 -> 2 
+                steps_per_inference = int(self.control_fps / self.inference_fps)    # 24 / 6 -> 4 
                 start_timestamp = time.time()
                 last_timestamp = start_timestamp
-                try:
-                    while True:
-                        # profiler = Profiler()
-                        # profiler.start()
-                        start_time = time.time()
-                        # get obs, 최근 n_obs_steps(2) 만큼의 obs를 temporal_downsample_ratio(1) 간격으로 획득 
-                        obs = self.env.get_obs(
-                            obs_steps=self.n_obs_steps,
-                            temporal_downsample_ratio=self.obs_temporal_downsample_ratio)
-                        # obs = dict()
-                        # logger.debug(f"obs_key:{obs.keys()}")
+                with open(latent_log_path, "w") as action_f:
+                    try:
+                        while True:
+                            # profiler = Profiler()
+                            # profiler.start()
+                            start_time = time.time()
+                            # get obs, 최근 n_obs_steps(2) 만큼의 obs를 temporal_downsample_ratio(1) 간격으로 획득 
+                            obs = self.env.get_obs(
+                                obs_steps=self.n_obs_steps,
+                                temporal_downsample_ratio=self.obs_temporal_downsample_ratio)
+                            # obs = dict()
 
-                        if len(obs) == 0:
-                            logger.warning("No observation received! Skip this step.")
+                            if len(obs) == 0:
+                                logger.warning("No observation received! Skip this step.")
+                                cur_time = time.time()
+                                precise_sleep(max(0., self.inference_interval_time - (cur_time - start_time)))
+                                step_count += steps_per_inference
+                                continue
+
+                            # create obs dict
+                            np_obs_dict = dict(obs)
+                            logger.debug(f"obs_key:{np_obs_dict.keys()}") 
+                            logger.debug(f"[DEBUG] left_wrist_img shape: {np_obs_dict['left_wrist_img'].shape}")
+                            left_img = np_obs_dict['left_wrist_img'][-1]
+                            logger.debug(f"left_wrist_img: shape={left_img.shape}, min={left_img.min()}, max={left_img.max()}")
+                            # get transformed real obs dict
+                            # np_obs_dict_low_dim = 2*[tcp pose(9d),gripper_width(1d),marker_embedding(63)]
+                            ### 07/07 ############################33
+                            # np_obs_dict = get_real_obs_dict(        
+                            #     env_obs=np_obs_dict, shape_meta=self.shape_meta)    # rgb image (0,255) -> (0,1)
+                            np_obs_dict = get_real_obs_dict(        
+                                env_obs=np_obs_dict, shape_meta=self.shape_meta, use_constant_rgb=self.use_constant_rgb, constant_rgb_value=self.constant_rgb_value)    # rgb image (0,255) -> (0,1)
+                            ############################################
+                            logger.debug(f"real_obs_key:{np_obs_dict.keys()}") 
+                            logger.debug(f"[DEBUG] real_left_wrist_img shape: {np_obs_dict['left_wrist_img'].shape}")
+                            left_img = np_obs_dict['left_wrist_img'][-1]
+                            logger.debug(f"real_left_wrist_img: shape={left_img.shape}, min={left_img.min()}, max={left_img.max()}")
+                            np_obs_dict, np_absolute_obs_dict = self.pre_process_obs(np_obs_dict)
+
+                            if 'left_robot_tcp_wrench' in np_obs_dict:
+                                left_tcp_wrench = np_obs_dict['left_robot_tcp_wrench'][-1]  # (16,)
+                                timestamp = time.time()
+                                with open(wrench_log_path, "a") as wrench_f:
+                                    wrench_f.write(f"{step_count},{timestamp},{left_tcp_wrench.tolist()}\n")
+                            # device transfer
+                            obs_dict = dict_apply(np_obs_dict,
+                                                lambda x: torch.from_numpy(x).unsqueeze(0).to(
+                                                    device=device))
+
+                            policy_time = time.time()
+                            # run policy
+                            # observation에 들어있는 tcp_pose는 get_ee_pose로 얻은 6d data를 9d로 변환한 것이기 때문애 성대 위치가 아니다. 
+                            with torch.no_grad():
+                                if self.use_latent_action_with_rnn_decoder: # use_mcy -> latent action return (not real action)
+                                    action_dict = policy.predict_action(obs_dict,
+                                                                        dataset_obs_temporal_downsample_ratio=self.dataset_obs_temporal_downsample_ratio,
+                                                                        return_latent_action=True)
+                                else:
+                                    action_dict = policy.predict_action(obs_dict)
+                            logger.debug(f"Policy inference time: {time.time() - policy_time:.3f}s")
+
+                            # device_transfer
+                            np_action_dict = dict_apply(action_dict,
+                                                        lambda x: x.detach().to('cpu').numpy())
+
+                            action_all = np_action_dict['action'].squeeze(0) # (32,29)
+                            action_f.write(f"{step_count},{action_all[-1].tolist()}\n") #(32,1)
+                            if self.use_latent_action_with_rnn_decoder: ## we use
+                                # add first absolute action to get absolute action
+                                if self.use_relative_action:
+                                    base_absolute_action = np.concatenate([ # 현재 시점의 absolute pose obs값, [-1]: 가장 최근 값 
+                                        np_absolute_obs_dict['left_robot_tcp_pose'][-1] if 'left_robot_tcp_pose' in np_absolute_obs_dict else np.array([]),
+                                        np_absolute_obs_dict['right_robot_tcp_pose'][-1] if 'right_robot_tcp_pose' in np_absolute_obs_dict else np.array([])
+                                    ], axis=-1)
+                                    # logger.debug(f"Base_absolute_action in real_runner: {base_absolute_action}") # (9,)
+                                    action_all = np.concatenate([   # action all = (action_all의 각 timesteps base_absolute_action) -> shape(num_timesteps, latent_dim + left_tcp_pose_dim + right_tcp_pose_dim)
+                                        action_all, # shape(num_timesteps, latent_dim)
+                                        base_absolute_action[np.newaxis, :].repeat(action_all.shape[0], axis=0) # base_absolute_action을 action_all.shape[0](num_timesteps) 만큼 복제 -> shape(num_timesteps, left_tcp_pose_dim + right_tcp_pose_dim)
+                                    ], axis=-1) #(41,29)
+                                    # logger.debug(f"action all 1 in real_runner: {action_all[-1]}") # (N,30(action_all+9(base_absolute))
+                                # add action step to get corresponding observation
+                                # 각 latent action timestep이 이후에 들어올 어느 시점에 대응되는지 알려주는 timestamp ###########################################################
+                                action_all = np.concatenate([  # action이 n_obs_steps 이후 timestep에 대응되므로, 이에 맞는 time index 부여 -> action all shape : [num_timestpes, latent_dim + left_tcp_pose_dim + right_tcp_pose_dim + num_timestep(1)]
+                                    action_all,
+                                    np.arange(self.n_obs_steps * self.dataset_obs_temporal_downsample_ratio, action_all.shape[0] + self.n_obs_steps * self.dataset_obs_temporal_downsample_ratio)[:, np.newaxis]    #(2, num_timesteps + 2)[:,np.newaxis] -> shape (num_timesteps,1)
+                                ], axis=-1)
+                                # logger.debug(f"action_all 2 in real runner: {action_all[-1]}")  # (N,30 + 9 + 1(timestampe(32))
+                            else: ## not use 
+                                if self.use_relative_action:
+                                    base_absolute_action = np.concatenate([
+                                        np_absolute_obs_dict['left_robot_tcp_pose'][-1] if 'left_robot_tcp_pose' in np_absolute_obs_dict else np.array([]),
+                                        np_absolute_obs_dict['right_robot_tcp_pose'][-1] if 'right_robot_tcp_pose' in np_absolute_obs_dict else np.array([])
+                                    ], axis=-1)
+                                    action_all = relative_actions_to_absolute_actions(action_all, base_absolute_action)
+
+                            if self.action_interpolation_ratio > 1: # not use 
+                                if self.use_latent_action_with_rnn_decoder:
+                                    action_all = action_all.repeat(self.action_interpolation_ratio, axis=0)
+                                else:
+                                    action_all = interpolate_actions_with_ratio(action_all, self.action_interpolation_ratio)    
+
+                            # TODO: only takes the first n_action_steps and add to the ensemble buffer
+                            # action_all 중 일부를 TCP(latent)와 gripper에 나눠서 ensemble buffer에 넣기
+                            logger.info(f" STEP: {step_count} ############################################################")
+                            logger.debug(f"self_latency_step: {self.latency_step}")
+                            logger.debug(f"action_all(latent) shape: {action_all.shape}")   # (29,41)
+                            if step_count % self.tcp_action_update_interval == 0:   # 현재 step이 TCP update 주기(6)에 도달했을 때 TCP action update
+                                self.tcp_action_buffer.clear()
+                                if self.use_latent_action_with_rnn_decoder:
+                                    tcp_action = action_all[self.latency_step:, ...]    # latency_step = 0 -> shape : (num_timesteps, D)
+                                    logger.debug(f"tcp_action: {tcp_action[-1]}")       # latent가 반복되기 때문에 latency 의미?
+                                else:   # not use 
+                                    if action_all.shape[-1] == 4:
+                                        tcp_action = action_all[self.latency_step:, :3]
+                                    elif action_all.shape[-1] == 8:
+                                        tcp_action = action_all[self.latency_step:, :6]
+                                    elif action_all.shape[-1] == 10: 
+                                        tcp_action = action_all[self.latency_step:, :9]
+                                    elif action_all.shape[-1] == 20:
+                                        tcp_action = action_all[self.latency_step:, :18]
+                                    else:
+                                        raise NotImplementedError
+                                # add to ensemble buffer
+                                logger.debug(f"Main Step: {step_count}, Add TCP action to ensemble buffer: {tcp_action[-1]}")
+                                logger.debug(f"tcp_action(latent) after latency shape: {tcp_action.shape}") # (29 - self.latency,41)
+                                self.tcp_ensemble_buffer.add_action(tcp_action, step_count) # add latent to tcp_ensemble_buffer
+
+                                if self.env.enable_exp_recording and not self.use_latent_action_with_rnn_decoder:
+                                    self.env.get_predicted_action(tcp_action, type='full_tcp')
+
+                            if step_count % self.gripper_action_update_interval == 0: # 현재 step이 gripper update 주기(10)에 도달했을 때 gripper action update
+                                self.gripper_action_buffer.clear()
+                                if self.use_latent_action_with_rnn_decoder:
+                                    gripper_action = action_all[self.gripper_latency_step:, ...]    # gripper_latency_step = 0 -> shape : (num_timesteps, D)
+                                else:   # not use 
+                                    if action_all.shape[-1] == 4:
+                                        gripper_action = action_all[self.gripper_latency_step:, 3:]
+                                    elif action_all.shape[-1] == 8:
+                                        gripper_action = action_all[self.gripper_latency_step:, 6:]
+                                    elif action_all.shape[-1] == 10:
+                                        gripper_action = action_all[self.gripper_latency_step:, 9:]
+                                    elif action_all.shape[-1] == 20:
+                                        gripper_action = action_all[self.gripper_latency_step:, 18:]
+                                    else:
+                                        raise NotImplementedError
+                                # add to ensemble buffer
+                                logger.debug(f"Step: {step_count}, Add gripper action to ensemble buffer: {gripper_action}")
+                                self.gripper_ensemble_buffer.add_action(gripper_action, step_count)
+
+                                if self.env.enable_exp_recording and not self.use_latent_action_with_rnn_decoder:
+                                    self.env.get_predicted_action(gripper_action, type='full_gripper')
+
                             cur_time = time.time()
-                            precise_sleep(max(0., self.inference_interval_time - (cur_time - start_time)))
-                            step_count += steps_per_inference
-                            continue
+                            precise_sleep(max(0., self.inference_interval_time - (cur_time - start_time))) # 주어진 inference 시간(1/inferece_fps)를 초과하지 않도록 sleep
+                            logger.info(f"original sleep time in main thread: {max(0.,self.inference_interval_time - (cur_time- start_time))}")
+                            #### additional sleep ##########################################################3
+                            # precise_sleep(1.0)
+                            if cur_time - start_timestamp >= self.max_duration_time:
+                                logger.info(f"Episode {episode_idx} reaches max duration time {self.max_duration_time} seconds.")
+                                break
+                            step_count += steps_per_inference # step_count = step_count + 2 
+                            logger.info(f"one runner cycle time:{time.time() - start_time}")
+                            # profiler.stop()
+                            # profiler.print()
 
-                        # create obs dict
-                        np_obs_dict = dict(obs)
-                        # get transformed real obs dict
-                        # np_obs_dict_low_dim = 2*[tcp pose(9d),gripper_width(1d),marker_embedding(63)]
-                        np_obs_dict = get_real_obs_dict(
-                            env_obs=np_obs_dict, shape_meta=self.shape_meta)
-                        np_obs_dict, np_absolute_obs_dict = self.pre_process_obs(np_obs_dict)
-
-                        # device transfer
-                        obs_dict = dict_apply(np_obs_dict,
-                                              lambda x: torch.from_numpy(x).unsqueeze(0).to(
-                                                  device=device))
-
-                        policy_time = time.time()
-                        # run policy
-                        # observation에 들어있는 tcp_pose는 get_ee_pose로 얻은 6d data를 9d로 변환한 것이기 때문애 성대 위치가 아니다. 
-                        with torch.no_grad():
-                            if self.use_latent_action_with_rnn_decoder: # use_mcy
-                                action_dict = policy.predict_action(obs_dict,
-                                                                    dataset_obs_temporal_downsample_ratio=self.dataset_obs_temporal_downsample_ratio,
-                                                                    return_latent_action=True)
-                            else:
-                                action_dict = policy.predict_action(obs_dict)
-                        logger.debug(f"Policy inference time: {time.time() - policy_time:.3f}s")
-
-                        # device_transfer
-                        np_action_dict = dict_apply(action_dict,
-                                                    lambda x: x.detach().to('cpu').numpy())
-
-                        action_all = np_action_dict['action'].squeeze(0)
-                        if self.use_latent_action_with_rnn_decoder: ## we use
-                            # add first absolute action to get absolute action
-                            if self.use_relative_action:
-                                base_absolute_action = np.concatenate([ # 현재 시점의 absolute pose obs값, [-1]: 가장 최근 값 
-                                    np_absolute_obs_dict['left_robot_tcp_pose'][-1] if 'left_robot_tcp_pose' in np_absolute_obs_dict else np.array([]),
-                                    np_absolute_obs_dict['right_robot_tcp_pose'][-1] if 'right_robot_tcp_pose' in np_absolute_obs_dict else np.array([])
-                                ], axis=-1)
-                                logger.debug(f"Base_absolute_action in real_runner: {base_absolute_action}") # (9,)
-                                action_all = np.concatenate([   # action all = (action_all의 각 timesteps base_absolute_action) -> shape(num_timesteps, latent_dim + left_tcp_pose_dim + right_tcp_pose_dim)
-                                    action_all, # shape(num_timesteps, latent_dim)
-                                    base_absolute_action[np.newaxis, :].repeat(action_all.shape[0], axis=0) # base_absolute_action을 action_all.shape[0](num_timesteps) 만큼 복제 -> shape(num_timesteps, left_tcp_pose_dim + right_tcp_pose_dim)
-                                ], axis=-1)
-                                logger.debug(f"action all 1 in real_runner: {action_all[-1]}") # (N,30(action_all+9(base_absolute))
-                            # add action step to get corresponding observation
-                            # 각 latent action timestep이 이후에 들어올 어느 시점에 대응되는지 알려주는 timestamp ###########################################################
-                            action_all = np.concatenate([  # action이 n_obs_steps 이후 timestep에 대응되므로, 이에 맞는 time index 부여 -> action all shape : [num_timestpes, latent_dim + left_tcp_pose_dim + right_tcp_pose_dim + num_timestep(1)]
-                                action_all,
-                                np.arange(self.n_obs_steps * self.dataset_obs_temporal_downsample_ratio, action_all.shape[0] + self.n_obs_steps * self.dataset_obs_temporal_downsample_ratio)[:, np.newaxis]    #(2, num_timesteps + 2)[:,np.newaxis] -> shape (num_timesteps,1)
-                            ], axis=-1)
-                            logger.debug(f"action_all 2 in real runner: {action_all[-1]}")  # (N,30 + 9 + 1(timestampe(32))
-                        else: ## not use 
-                            if self.use_relative_action:
-                                base_absolute_action = np.concatenate([
-                                    np_absolute_obs_dict['left_robot_tcp_pose'][-1] if 'left_robot_tcp_pose' in np_absolute_obs_dict else np.array([]),
-                                    np_absolute_obs_dict['right_robot_tcp_pose'][-1] if 'right_robot_tcp_pose' in np_absolute_obs_dict else np.array([])
-                                ], axis=-1)
-                                action_all = relative_actions_to_absolute_actions(action_all, base_absolute_action)
-
-                        if self.action_interpolation_ratio > 1: # not use 
-                            if self.use_latent_action_with_rnn_decoder:
-                                action_all = action_all.repeat(self.action_interpolation_ratio, axis=0)
-                            else:
-                                action_all = interpolate_actions_with_ratio(action_all, self.action_interpolation_ratio)    
-
-                        # TODO: only takes the first n_action_steps and add to the ensemble buffer
-                        # action_all 중 일부를 TCP(latent)와 gripper에 나눠서 ensemble buffer에 넣기
-                        if step_count % self.tcp_action_update_interval == 0:   # 현재 step이 TCP update 주기(6)에 도달했을 때 TCP action update
-                            if self.use_latent_action_with_rnn_decoder:
-                                tcp_action = action_all[self.latency_step:, ...]    # latency_step = 0 -> shape : (num_timesteps, D)
-                                logger.debug(f"self_latency_step: {self.latency_step}")
-                                logger.debug(f"tcp_action: {tcp_action[-1]}")
-                            else:   # not use 
-                                if action_all.shape[-1] == 4:
-                                    tcp_action = action_all[self.latency_step:, :3]
-                                elif action_all.shape[-1] == 8:
-                                    tcp_action = action_all[self.latency_step:, :6]
-                                elif action_all.shape[-1] == 10: # used 
-                                    tcp_action = action_all[self.latency_step:, :9]
-                                elif action_all.shape[-1] == 20:
-                                    tcp_action = action_all[self.latency_step:, :18]
-                                else:
-                                    raise NotImplementedError
-                            # add to ensemble buffer
-                            logger.debug(f"Step: {step_count}, Add TCP action to ensemble buffer: {tcp_action[-1]}")
-                            self.tcp_ensemble_buffer.add_action(tcp_action, step_count)
-
-                            if self.env.enable_exp_recording and not self.use_latent_action_with_rnn_decoder:
-                                self.env.get_predicted_action(tcp_action, type='full_tcp')
-
-                        if step_count % self.gripper_action_update_interval == 0: # 현재 step이 gripper update 주기(10)에 도달했을 때 gripper action update
-                            if self.use_latent_action_with_rnn_decoder:
-                                gripper_action = action_all[self.gripper_latency_step:, ...]    # gripper_latency_step = 0 -> shape : (num_timesteps, D)
-                            else:   # not use 
-                                if action_all.shape[-1] == 4:
-                                    gripper_action = action_all[self.gripper_latency_step:, 3:]
-                                elif action_all.shape[-1] == 8:
-                                    gripper_action = action_all[self.gripper_latency_step:, 6:]
-                                elif action_all.shape[-1] == 10:
-                                    gripper_action = action_all[self.gripper_latency_step:, 9:]
-                                elif action_all.shape[-1] == 20:
-                                    gripper_action = action_all[self.gripper_latency_step:, 18:]
-                                else:
-                                    raise NotImplementedError
-                            # add to ensemble buffer
-                            logger.debug(f"Step: {step_count}, Add gripper action to ensemble buffer: {gripper_action}")
-                            self.gripper_ensemble_buffer.add_action(gripper_action, step_count)
-
-                            if self.env.enable_exp_recording and not self.use_latent_action_with_rnn_decoder:
-                                self.env.get_predicted_action(gripper_action, type='full_gripper')
-
-                        cur_time = time.time()
-                        precise_sleep(max(0., self.inference_interval_time - (cur_time - start_time))) # 주어진 inference 시간(1/inferece_fps)를 초과하지 않도록 sleep 
-                        if cur_time - start_timestamp >= self.max_duration_time:
-                            logger.info(f"Episode {episode_idx} reaches max duration time {self.max_duration_time} seconds.")
-                            break
-                        step_count += steps_per_inference # step_count = step_count + 2 
-                        logger.info(f"one runner cycle time:{time.time() - start_time}")
-                        # profiler.stop()
-                        # profiler.print()
-
-                except KeyboardInterrupt:
-                    logger.warning("KeyboardInterrupt! Terminate the episode now!")
-                finally:
-                    self.stop_event.set()   
-                    action_thread.join()    # thread가 완전히 끝날 때까지 대기 
-                    # if self.enable_video_recording:
-                    #     self.stop_record_video()
-                    self.env.save_exp(episode_idx)
+                    except KeyboardInterrupt:
+                        logger.warning("KeyboardInterrupt! Terminate the episode now!")
+                    finally:
+                        self.stop_event.set()   
+                        action_thread.join()    # thread가 완전히 끝날 때까지 대기 
+                        self.executed_tcp_action_log_path = None
+                        self.relative_tcp_action_log_path = None
+                        self.latency_tcp_action_log_path = None
+                        # if self.enable_video_recording:
+                        #     self.stop_record_video()
+                        self.env.save_exp(episode_idx)
 
             # TODO: support success count
             spin_thread.join()

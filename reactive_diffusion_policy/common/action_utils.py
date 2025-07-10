@@ -6,6 +6,7 @@ from reactive_diffusion_policy.common.space_utils import (
     homo_matrix_to_pose_9d_batch
 )
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
+from loguru import logger
 
 def interpolate_actions_with_ratio(actions: np.ndarray, N: int):
     """
@@ -81,7 +82,14 @@ def absolute_actions_to_relative_actions(actions: np.ndarray, base_absolute_acti
         base_absolute_action = actions[0].copy()
     for tcp_dim in tcp_dim_list:
         assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
+        # logger.debug(f"base_absolute_action_9d: {base_absolute_action}")
+        # logger.debug(f"actions_9d: {actions}")
         base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
+        # logger.debug(f"##############################################################################")
+        # logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
+        # logger.debug(f"actions: {actions}")
+        # logger.debug(f"actions_mat: {pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
+        # logger.debug(f"relative_mat: {np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
         actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(
             actions[:, tcp_dim]))[:, :len(tcp_dim)]
 
@@ -105,8 +113,15 @@ def relative_actions_to_absolute_actions(actions: np.ndarray, base_absolute_acti
     for tcp_dim in tcp_dim_list:
         assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
         base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
+        logger.debug(f"######################relative to absolute########################################################")
+        logger.debug(f"base_tcp_action: {base_absolute_action}")
+        logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
+        logger.debug(f"actions: {actions}")
+        # actions[:, tcp_dim[:3]] *= -1 # 07/07
+        # logger.debug(f"actions: {actions}")
         actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(base_tcp_pose_mat @ pose_3d_9d_to_homo_matrix_batch(
             actions[:, tcp_dim]))[:, :len(tcp_dim)]
+        logger.debug(f"actions: {actions}")
 
     return actions
 

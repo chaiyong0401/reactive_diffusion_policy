@@ -13,20 +13,20 @@ shape_meta: &shape_meta
   obs:
     # left_robot_tcp_pose:
     left_robot_tcp_pose:
-      shape: [9]
+      shape: [9] # 07/06
       type: low_dim
     left_robot_gripper_width:
       shape: [1]
       type: low_dim
     left_robot_tcp_wrench:
-      shape: [ 16 ]  # the raw dimension is (63*2), we use PCA to reduce the dimension to 15
+      shape: [ 6 ]  # 07/05 obs tactile 6
       type: low_dim
   extended_obs: # for the AT RNN decoder of the latent diffusion policy
     left_robot_tcp_wrench:
-      shape: [ 16 ]  # the raw dimension is (63*2), we use PCA to reduce the dimension to 15
+      shape: [ 6 ]  # 07/05 obs tactile 6
       type: low_dim
   action:
-    shape: [10] # (3+6+1) (x, y, z, 6d rotation, gripper_width)
+    shape: [10] # (3+6+1) (x, y, z, 6d rotation, gripper_width)  # 07/06
 
 dataset:
   _target_: reactive_diffusion_policy.dataset.real_image_tactile_dataset.RealImageTactileDataset
