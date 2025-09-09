@@ -9,7 +9,8 @@ from reactive_diffusion_policy.model.diffusion.conv1d_components import (
     Downsample1d, Upsample1d, Conv1dBlock)
 from reactive_diffusion_policy.model.diffusion.positional_embedding import SinusoidalPosEmb
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
+from loguru import logger
 
 class ConditionalResidualBlock1D(nn.Module):
     def __init__(self, 
@@ -38,6 +39,7 @@ class ConditionalResidualBlock1D(nn.Module):
             nn.Linear(cond_dim, cond_channels),
             Rearrange('batch t -> batch t 1'),
         )
+        logger.info(f"ConditionalResidualBlock1D: in_channels={in_channels}, out_channels={out_channels}, cond_dim={cond_dim}, cond_predict_scale={cond_predict_scale}")
 
         # make sure dimensions compatible
         self.residual_conv = nn.Conv1d(in_channels, out_channels, 1) \
@@ -91,7 +93,11 @@ class ConditionalUnet1D(nn.Module):
         cond_dim = dsed
         if global_cond_dim is not None:
             cond_dim += global_cond_dim
-
+            # 08/07 3dtacdex3d
+            cond_dim = cond_dim + 416
+            logger.debug(f"ConditionalUnet1D: global_cond_dim={global_cond_dim}, cond_dim={cond_dim}")
+        
+        logger.info(f"condition dimension: {cond_dim}, input_dim: {input_dim}, local_cond_dim: {local_cond_dim}, global_cond_dim: {global_cond_dim}")
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
         local_cond_encoder = None

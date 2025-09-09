@@ -15,6 +15,7 @@ from diffusion_policy.common.precise_sleep import precise_wait
 import torch
 from umi.common.pose_util import pose_to_mat, mat_to_pose
 import zerorpc
+from loguru import logger
 
 class Command(enum.Enum):
     STOP = 0
@@ -23,10 +24,10 @@ class Command(enum.Enum):
 
 tx_flangerot90_tip = np.identity(4)
 # tx_flangerot90_tip[:3, 3] = np.array([-0.0826, 0, 0.257])
-# tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.275])
+tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.237])
 # tx_flangerot90_tip[:3, 3] = np.array([0, 0.05, 0.275])
-tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.247]) # fixed 
-
+# tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.247]) # fixed 
+# tx_flangerot90_tip[:3, 3] = np.array([-0.0828, 0, 0.237])
 
 tx_flangerot45_flangerot90 = np.identity(4)
 tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
@@ -168,6 +169,21 @@ class FrankaInterpolationController(mp.Process):
         self.input_queue = input_queue
         self.ring_buffer = ring_buffer
         self.receive_keys = receive_keys
+
+        # plan_example = {
+        #     'planned_time': np.array(0.0, dtype=np.float64),
+        #     'planned_pose': np.zeros(6, dtype=np.float64),
+        #     'segment_id': np.array(0, dtype=np.int64),
+        # }
+        # plan_rb = SharedMemoryRingBuffer.create_from_examples(
+        #     shm_manager=shm_manager,
+        #     examples=plan_example,
+        #     get_max_k=4096,
+        #     get_time_budget=0.2,
+        #     put_desired_frequency=frequency
+        # )
+        # self.plan_buffer = plan_rb
+        # self.plan_sample_dt = 0.01
             
     # ========= launch method ===========
     def start(self, wait=True):
@@ -242,6 +258,12 @@ class FrankaInterpolationController(mp.Process):
     def get_all_state(self):
         return self.ring_buffer.get_all()   # 버퍼가 k개 이상 차 있으면 최대 k개, 아니면 차있는 만큼 state return 
     
+    def get_planned(self, k=None, out=None):
+        if k is None:
+            return self.plan_buffer.get_all()
+        else:
+            return self.plan_buffer.get_last_k(k=k, out=out)
+    
 
     # ========= main loop in process ============
     def run(self):
@@ -287,6 +309,7 @@ class FrankaInterpolationController(mp.Process):
             iter_idx = 0
             keep_running = True
             t_first =0
+            segment_id = 0
             while keep_running:
                 # send command to robot
                 t_now = time.monotonic()
@@ -295,8 +318,19 @@ class FrankaInterpolationController(mp.Process):
                 #     print('extrapolate', diff)
                 tip_pose = pose_interp(t_now) # t_now의 보간된 tip 위치 call
                 # print(f"t_now: {t_now}")
-                # print(f"tip_pose: {tip_pose}") 
+                # 08/07
+                # if tip_pose[1] > 0.24 :  # y축 방향 너무 벗어나지 않도록 or tip_pose[0] < 0.625
+                #     tip_pose[0] += 0.008  # 약간 더 forward (x축 방향)  # 08/07
+                #     tip_pose[2] += -0.005  # 약간 더 위로 (z축 방향)  # 08/07
+                    # logger.debug(f"modified tip_pose: {tip_pose}")
+                # logger.info(f"original tip_pose: {tip_pose}")
+                # flange_pose = mat_to_pose(pose_to_mat(tip_pose) @ tx_tip_flange)
+                # logger.debug(f"original flange_pose: {flange_pose}")
+                # tip_pose[0] += 0.01  # 약간 더 forward (z축 방향)
+                # logger.info(f"modified tip_pose: {tip_pose}") 
+                # logger.debug(f"flange to tip: {tx_flange_tip}")
                 flange_pose = mat_to_pose(pose_to_mat(tip_pose) @ tx_tip_flange)    
+                # logger.debug(f"modified flange_pose: {flange_pose}")
 
                 # send command to robot
                 robot.update_desired_ee_pose(flange_pose)
@@ -373,17 +407,8 @@ class FrankaInterpolationController(mp.Process):
                     elif cmd == Command.SCHEDULE_WAYPOINT.value:    # 실제로 사용되는 코드 
                         target_pose = command['target_pose']
                         target_time = float(command['target_time'])
-                        # print(f"target_pose: {target_pose}")
-                        # translate global time to monotonic time
-                        # print(f"time_monotonic: {time.monotonic()}")
-                        # print(f"time.time: {time.time()}")
-                        # print(f"target_time: {target_time}")
                         target_time = time.monotonic() - time.time() + target_time
                         curr_time = t_now + dt
-                        # print(f"target_time: {target_time}")
-                        # print(f"t_now: {t_now}")
-                        # print(f"dt: {dt}")
-                        # print(f"curr_time: {curr_time}")
                         pose_interp = pose_interp.schedule_waypoint(    # waypoint 보간하여 pose_interp으로 저장
                             pose=target_pose,
                             time=target_time,
@@ -391,6 +416,24 @@ class FrankaInterpolationController(mp.Process):
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
+
+                        # === 여기부터 추가: 막 추가된 "마지막 세그먼트" 샘플해서 송신 ===
+                        # tt = pose_interp.times
+                        # if tt.size >= 2:
+                        #     t0, t1 = float(tt[-2]), float(tt[-1])
+                        #     if t1 > t0:
+                        #         tq = np.arange(t0, t1 + 1e-9, self.plan_sample_dt)
+                        #         Xq = pose_interp(tq)
+                        #         logger.debug(f"tq: {tq}")
+                        #         # 단조시각 → 월클락
+                        #         mono_to_wall = time.time() - time.monotonic()
+                        #         for t_s, p_s in zip(tq, Xq):
+                        #             self.plan_buffer.put({
+                        #                 'planned_time': t_s + mono_to_wall,
+                        #                 'planned_pose': p_s,
+                        #                 'segment_id': segment_id
+                        #             })
+                        #         segment_id += 1
                     else:
                         keep_running = False
                         break

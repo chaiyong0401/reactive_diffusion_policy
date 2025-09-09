@@ -133,6 +133,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         # resume training
         if cfg.training.resume:
             lastest_ckpt_path = self.get_checkpoint_path()
+            # lastest_ckpt_path = pathlib.Path("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.15/14.54.41_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0715145439/checkpoints/latest.ckpt")
             if lastest_ckpt_path.is_file():
                 accelerator.print(f"Resuming from checkpoint {lastest_ckpt_path}")
                 # print(f"Resuming from checkpoint {lastest_ckpt_path}")
@@ -449,7 +450,7 @@ if __name__ == "__main__":
 
 
 
-# ###################################33 eval code #################################
+##################################33 eval code #################################
 # if __name__ == "__main__":
 #     import sys
 #     import os
@@ -585,7 +586,7 @@ if __name__ == "__main__":
 #         # resume training
 #         if cfg.training.resume:
 #             # lastest_ckpt_path = self.get_checkpoint_path()
-#             lastest_ckpt_path = pathlib.Path("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/12.12.11_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0626121209/checkpoints/latest.ckpt")
+#             lastest_ckpt_path = pathlib.Path("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.09/22.10.34_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0709221032/checkpoints/latest.ckpt")
 #             if lastest_ckpt_path.is_file():
 #                 accelerator.print(f"Resuming from checkpoint {lastest_ckpt_path}")
 #                 # print(f"Resuming from checkpoint {lastest_ckpt_path}")
@@ -601,7 +602,7 @@ if __name__ == "__main__":
 
 #         # compute normalizer on the main process and save to disk
 #         # normalizer_path = os.path.join(self.output_dir, 'normalizer.pkl')
-#         normalizer_path = os.path.join("/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.06.26/12.12.11_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0626121209","normalizer.pkl")
+#         normalizer_path = os.path.join("//home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.09/22.10.34_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0709221032","normalizer.pkl")
 #         # if accelerator.is_main_process:
 #         #     normalizer = dataset.get_normalizer()
 #         #     print(normalizer.__dict__)
@@ -819,7 +820,7 @@ if __name__ == "__main__":
 #                             # sample trajectory from training set, and evaluate difference
 #                             batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
 #                             obs_dict = batch['obs']
-#                             print(f"obs_dict keys: {obs_dict.keys()}")
+#                             # print(f"obs_dict keys: {obs_dict.keys()}")
 #                             extended_obs_dict = batch['extended_obs']
 #                             gt_action = batch['action']
 
@@ -850,10 +851,23 @@ if __name__ == "__main__":
 #                             del result
 #                             del pred_action
 #                             del mse
+#                 print(f"[DEBUG] Collected {len(log_data)} samples into log_data")
 #                 log_file = os.path.join(self.output_dir, 'inference_log.json')
 #                 with open(log_file, 'w') as f:
 #                     import json
 #                     json.dump(log_data, f, indent=2)
+#                 txt_path = os.path.join(self.output_dir, 'tcp_pose_gt_action_log.txt')
+#                 with open(txt_path, 'w') as txt_file:
+#                     txt_file.write("tcp_pose\tgt_action\n")
+#                     for item in log_data:
+#                         tcp = item['tcp_pose']  # 중첩 리스트 허용
+#                         gt = item['gt_action']
+#                         print("[DEBUG] item =", item)
+
+#                         txt_file.write(f"{str(tcp)}\t{str(gt)}\n")
+                        
+
+#                 print(f"[INFO] TCP pose and GT action log saved to {txt_path}")
 
 #                 print(f"[INFO] Inference log saved to {log_file}")
 #                 accelerator.wait_for_everyone()

@@ -19,6 +19,18 @@ def ros_pose_to_6d_pose(pose: Pose) -> np.ndarray:
     trans = np.array([pose.position.x, pose.position.y, pose.position.z])
     return np.concatenate([trans, euler])
 
+def ros_pose_to_6d_pose_mcy_rotvec(pose: Pose) -> np.ndarray:   # 07/11
+    """
+    Convert ROS Pose message (position + quaternion(w,x,y,z))
+    → 6D pose (x, y, z, rotvec_x, rotvec_y, rotvec_z)
+    """
+    # quaternion 순서: [x, y, z, w] for scipy
+    quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+    rot = st.Rotation.from_quat(quat)
+    rotvec = rot.as_rotvec()  # 3D rotation vector
+    pos = np.array([pose.position.x, pose.position.y, pose.position.z])
+    return np.concatenate([pos, rotvec])
+
 def pose_6d_to_pose_7d(pose: np.ndarray) -> np.ndarray:
     # convert 6D pose (x, y, z, r, p, y) to 7D pose (x, y, z, qw, qx, qy, qz)
     quat = t3d.euler.euler2quat(pose[3], pose[4], pose[5])

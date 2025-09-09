@@ -5,7 +5,7 @@ from dynamixel_sdk import PortHandler, PacketHandler
 
 # Motor and communication settings
 DEVICENAME = "/dev/ttyUSB0"
-# DEVICENAME = "/dev/ttyUSB2"
+# DEVICENAME = "/dev/ttyUSB9"
 PROTOCOL_VERSION = 2
 BAUDRATE = 57600
 

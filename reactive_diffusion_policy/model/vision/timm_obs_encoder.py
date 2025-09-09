@@ -14,9 +14,16 @@ from reactive_diffusion_policy.model.common.module_attr_mixin import ModuleAttrM
 
 from reactive_diffusion_policy.common.pytorch_util import replace_submodules
 from reactive_diffusion_policy.model.vision.choice_randomizer import RandomChoice
-from timm.layers.attention_pool import AttentionPoolLatent
+# from timm.layers.attention_pool import AttentionPoolLatent
+try:
+    from timm.layers.attention_pool import AttentionPoolLatent   # 혹시 포크/구버전 대응
+except ImportError:
+    # 공식 timm 경로 (권장)
+    from timm.layers.attention_pool2d import AttentionPool2d as AttentionPoolLatent
 
-logger = logging.getLogger(__name__)
+
+# logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class AttentionPool2d(nn.Module):
@@ -181,6 +188,9 @@ class TimmObsEncoder(ModuleAttrMixin):
                 raise NotImplementedError(f"Unsupported downsample_ratio: {downsample_ratio}")
         elif model_name.startswith('vit'):
             feature_dim = model.num_features
+            # 08/07 3dtacdex3d 안함 no<
+            # feature_dim = model.num_features + 64
+            logger.info(f"feature_dim: {feature_dim}")
             num_heads = model.blocks[0].attn.num_heads
             if fused_model_name != '':
                 feature_dim = feature_dim + fused_model.num_features
@@ -291,9 +301,9 @@ class TimmObsEncoder(ModuleAttrMixin):
                     num_heads=num_heads,
                     norm_layer=partial(nn.LayerNorm, eps=1e-6),
                 )
-            else:
-                raise NotImplementedError(f"Unsupported feature_aggregation: {self.feature_aggregation}")
-
+            # else:
+            #     raise NotImplementedError(f"Unsupported feature_aggregation: {self.feature_aggregation}")
+        logger.info(f"self.feature_aggregation: {self.feature_aggregation}")
         if self.feature_aggregation == 'soft_attention':
             self.attention = nn.Sequential(
                 nn.Linear(feature_dim, 1, bias=False),
@@ -318,6 +328,7 @@ class TimmObsEncoder(ModuleAttrMixin):
                 encoder_layer=nn.TransformerEncoderLayer(d_model=feature_dim, nhead=4),
                 num_layers=4)
         elif self.feature_aggregation == 'attention_pool_2d':
+            logger.info(f"In the attention_pool_2d")
             self.attention_pool_2d = AttentionPool2d(
                 spacial_dim=feature_map_shape[0],
                 embed_dim=feature_dim,
@@ -395,6 +406,7 @@ class TimmObsEncoder(ModuleAttrMixin):
             # compatible with diffusion unet image policy
             assert len(feature.shape) == 2 and feature.shape[0] == BT
             features.append(feature.reshape(B, -1))
+            # logger.debug(f"{key} features: {[f.shape for f in features]}")
 
         # process lowdim input
         for key in self.low_dim_keys:
@@ -403,8 +415,14 @@ class TimmObsEncoder(ModuleAttrMixin):
             BT = data.shape[0]
             assert BT == batch_size * self.obs_horizon
             B = BT // self.obs_horizon
-            assert data.shape[1:] == self.key_shape_map[key]
+            # 08/07 3dtacdex3d
+            # assert data.shape[1:] == self.key_shape_map[key]
             features.append(data.reshape(B, -1))
+            # if key.endswith('tcp_wrench'):
+            #     # For wrench, we use the default normalizer
+            #     logger.debug(f"{key} BT shape: data.shape: {data.shape}")
+            #     features[-1] = features[-1] * 0.01
+            # logger.debug(f"{key} features: {[f.shape for f in features]}, data shape: {data.shape}")
 
         # concatenate all features
         result = torch.cat(features, dim=-1)
@@ -423,6 +441,8 @@ class TimmObsEncoder(ModuleAttrMixin):
                 dtype=self.dtype,
                 device=self.device)
             example_obs_dict[key] = this_obs
+            logger.debug(f"example_obs_dict: {key} shape: {this_obs.shape}")
+        logger.debug(f"example_obs_dict: {example_obs_dict.keys()}")
         example_output = self.forward(example_obs_dict)
         assert len(example_output.shape) == 2
         # compatible with diffusion unet image policy

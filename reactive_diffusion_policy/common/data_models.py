@@ -32,6 +32,7 @@ class ForceSensorMessage(BaseModel):
 
 class BimanualRobotStates(BaseModel):
     leftRobotTCP: List[float] = [0.0] * 7  # (7) (x, y, z, qw, qx, qy, qz)
+    # leftRobotTCP: List[float] = [0.0] * 6  # (7) (x, y, z, rx,ry,rz)    # 07/11 7d to 6d
     rightRobotTCP: List[float] = [0.0] * 7  # (7) (x, y, z, qw, qx, qy, qz)
     leftRobotTCPVel: List[float] = [0.0] * 6  # (6) (vx, vy, vz, wx, wy, wz)
     rightRobotTCPVel: List[float] = [0.0] * 6  # (6) (vx, vy, vz, wx, wy, wz)

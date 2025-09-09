@@ -19,11 +19,13 @@ shape_meta: &shape_meta
       shape: [1]
       type: low_dim
     left_robot_tcp_wrench:
-      shape: [ 6 ]  # 07/05 obs tactile 6
+      # shape: [ 16 ]  # 07/05 obs tactile 6
+      shape: [ 48 ]  # 08/07 obs tactile 6
       type: low_dim
   extended_obs: # for the AT RNN decoder of the latent diffusion policy
     left_robot_tcp_wrench:
-      shape: [ 6 ]  # 07/05 obs tactile 6
+      # shape: [ 16 ]  # 07/05 obs tactile 6
+      shape: [ 48 ]  # 08/07 obs tactile 6
       type: low_dim
   action:
     shape: [10] # (3+6+1) (x, y, z, 6d rotation, gripper_width)  # 07/06

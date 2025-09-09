@@ -9,6 +9,7 @@ from reactive_diffusion_policy.model.common.shape_util import get_output_shape
 from reactive_diffusion_policy.model.vae.vector_quantize_pytorch.residual_vq import ResidualVQ
 from reactive_diffusion_policy.model.vae.distributions import DiagonalGaussianDistribution
 from reactive_diffusion_policy.model.vae.utils import *
+from loguru import logger
 
 class MLP(nn.Module):
     def __init__(
@@ -127,7 +128,11 @@ class VAE:
         if self.use_rnn_decoder:
             all_extented_obs_keys = list(shape_meta['extended_obs'].keys())
             self.extented_obs_keys = sorted(all_extented_obs_keys)
-            self.rnn_temporal_cond_dim = sum([shape_meta['extended_obs'][extented_obs_key]['shape'][0] for extented_obs_key in self.extented_obs_keys])
+            ## original code
+            # self.rnn_temporal_cond_dim = sum([shape_meta['extended_obs'][extented_obs_key]['shape'][0] for extented_obs_key in self.extented_obs_keys])
+            ### 08/07 3dtacdex3d
+            self.rnn_temporal_cond_dim = 3
+            
         self.use_vq = use_vq
         self.n_embed = n_embed
         self.vqvae_groups = vqvae_groups
@@ -269,7 +274,8 @@ class VAE:
             if extend_obs_pad_after_n is not None:
                 padding_obs = extended_obs_dict[extented_obs_key][..., -1:, :].repeat(1, extend_obs_pad_after_n, 1)
                 extented_obs = torch.cat([padding_obs, extented_obs], dim=-2)
-            extented_obs = self.normalizer[extented_obs_key].normalize(extented_obs)
+            # 3dtacdex3d 08/22 
+            # extented_obs = self.normalizer[extented_obs_key].normalize(extented_obs)
             temporal_cond.append(extented_obs)
         temporal_cond = torch.cat(temporal_cond, dim=-1)
         return temporal_cond
@@ -278,8 +284,8 @@ class VAE:
 
         state = batch["action"]
         state = self.normalizer['action'].normalize(state)
-        state = state / self.act_scale
-        state = self.preprocess(state)
+        state = state / self.act_scale  # (64,32,10)
+        state = self.preprocess(state)  # (64,320)) 
 
         state_rep = self.encoder(state)
         if self.use_vq:
@@ -297,6 +303,10 @@ class VAE:
 
         encoder_loss = (state - dec_out).abs().mean()
         vae_recon_loss = torch.nn.MSELoss()(state, dec_out)
+        # logger.debug(f"state: {state}")
+        # logger.debug(f"dec_out: {dec_out}")
+        # logger.debug(f"encoder_loss: {encoder_loss.item()}")
+        # logger.debug(f"vae_recon_loss: {vae_recon_loss.item()}")
 
         return_dict = {
             "loss": encoder_loss,
@@ -320,6 +330,7 @@ class VAE:
                 "kl_loss": kl_loss.clone().detach().cpu().numpy(),
                 "rep_loss": rep_loss.clone().detach().cpu().numpy(),
             })
+        # logger.debug(f"rep_loss: {rep_loss.item()}")
 
         return return_dict
 

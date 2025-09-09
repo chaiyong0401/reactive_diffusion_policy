@@ -54,8 +54,16 @@ class LinearNormalizer(DictOfTensorMixin):
         if isinstance(x, dict):
             result = dict()
             for key, value in x.items():
-                params = self.params_dict[key]
-                result[key] = _normalize(value, params, forward=forward)
+                # original
+                # params = self.params_dict[key]
+                # result[key] = _normalize(value, params, forward=forward)
+                # 08/07 3dtacdex3d
+                if key.endswith('tcp_wrench'):
+                    # For wrench, we use the default normalizer
+                    result[key] = _normalize2(value, forward=forward)
+                else:
+                    params = self.params_dict[key]
+                    result[key] = _normalize(value, params, forward=forward)
             return result
         else:
             if '_default' not in self.params_dict:
@@ -273,6 +281,23 @@ def _normalize(x, params, forward=True):
         x = x * scale + offset
     else:
         x = (x - offset) / scale
+    x = x.reshape(src_shape)
+    return x
+
+# 08/07 3dtacdex3d
+def _normalize2(x, forward=True):
+    # assert 'scale' in params
+    if isinstance(x, np.ndarray):
+        x = torch.from_numpy(x)
+    # scale = params['scale']
+    # offset = params['offset']
+    # x = x.to(device=scale.device, dtype=scale.dtype)
+    src_shape = x.shape
+    x = x.reshape(-1, 256)
+    # if forward:
+    #     x = x * scale + offset
+    # else:
+    #     x = (x - offset) / scale
     x = x.reshape(src_shape)
     return x
 

@@ -58,6 +58,50 @@ def get_real_obs_dict(
             obs_dict_np[key] = this_data_in
     return obs_dict_np
 
+def get_real_obs_dict_rdp(  # 07/31
+        env_obs: Dict[str, np.ndarray], 
+        shape_meta: dict,
+        is_extended_obs: bool = False
+        ) -> Dict[str, np.ndarray]:
+    obs_dict_np = dict()
+    if is_extended_obs:
+        obs_shape_meta = shape_meta['extended_obs']
+    else:
+        obs_shape_meta = shape_meta['obs']
+    for key, attr in obs_shape_meta.items():
+        type = attr.get('type', 'low_dim')
+        shape = attr.get('shape')
+        if type == 'rgb':
+            this_imgs_in = env_obs[key]
+            t,hi,wi,ci = this_imgs_in.shape
+            co,ho,wo = shape
+            assert ci == co
+            out_imgs = this_imgs_in
+            if (ho != hi) or (wo != wi) or (this_imgs_in.dtype == np.uint8):
+                tf = get_image_transform(
+                    input_res=(wi,hi), 
+                    output_res=(wo,ho), 
+                    bgr_to_rgb=False)
+                out_imgs = np.stack([tf(x) for x in this_imgs_in])
+                if this_imgs_in.dtype == np.uint8:
+                    out_imgs = out_imgs.astype(np.float32) / 255
+            # THWC to TCHW
+            obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
+        elif type == 'low_dim':
+            if "wrt" in key:
+                continue
+            elif 'left_robot_tcp_wrench' in key:  # single robot system에서 left_robot_tcp_wrench로 변경 # 07/30
+                this_data_in = env_obs[f'camera0_tactile_offset']
+            else:
+                this_data_in = env_obs[key]
+            # print(f"this_data_in in get_real_obs_dict: {this_data_in}")
+            if 'pose' in key and shape == (2,): # not use in mcy
+                # take X,Y coordinates
+                this_data_in = this_data_in[...,[0,1]]
+                # print(f"this_data_in in get_real_obs_dict and pose : {this_data_in}")
+            obs_dict_np[key] = this_data_in
+    return obs_dict_np
+
 # env_obs에서 수집한 obs data를 multi robot system learning model에 사용할 수 있도록 변환
 # robot EE의 pose + rotation 변환하여 relative obs 생성
 # 1. image + state data pre_process, 2. 로봇 간 상대 위치 변환 3. episode 시작 지점과의 상대 위치 변환 
@@ -175,6 +219,91 @@ def get_real_umi_obs_dict(
     return obs_dict_np
 
 
+# def get_real_umi_obs_dict_single(
+#         env_obs: Dict[str, np.ndarray], 
+#         shape_meta: dict,
+#         obs_pose_repr: str='abs',
+#         episode_start_pose: List[np.ndarray]=None,
+#         ) -> Dict[str, np.ndarray]:
+#     obs_dict_np = dict()
+#     # process non-pose
+#     obs_shape_meta = shape_meta['obs'] # obs_shape_meta -> (camera0_rgb, robot0_eef_pos, robot0_eef_rot_axis_angle, robot0_gripper_width, robot0_eef_rot_axis_angle_wrt_start)
+#     robot_prefix_map = collections.defaultdict(list) # 로봇 이름을 기반으로 키를 mapping. 다중 로봇을 관리하기 위한 mapping table 
+#     for key, attr in obs_shape_meta.items():
+#         type = attr.get('type', 'low_dim') # RGB, low_dim data인지 구분 
+#         shape = attr.get('shape')
+#         if type == 'rgb': # image 데이터 size & shape 변환 
+#             this_imgs_in = env_obs[key]
+#             t,hi,wi,ci = this_imgs_in.shape
+#             co,ho,wo = shape
+#             assert ci == co
+#             out_imgs = this_imgs_in
+#             if (ho != hi) or (wo != wi) or (this_imgs_in.dtype == np.uint8):
+#                 tf = get_image_transform(
+#                     input_res=(wi,hi), 
+#                     output_res=(wo,ho), 
+#                     bgr_to_rgb=False)
+#                 out_imgs = np.stack([tf(x) for x in this_imgs_in])
+#                 if this_imgs_in.dtype == np.uint8:
+#                     out_imgs = out_imgs.astype(np.float32) / 255
+#             # THWC to TCHW
+#             obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
+#         elif type == 'low_dim' and ('eef' not in key):  # eef를 제외한 low_dim data 복사 + robot_prefix_map에 로봇별 obs data mapping 
+#             this_data_in = env_obs[key]
+#             obs_dict_np[key] = this_data_in
+#             # handle multi-robots
+#             ks = key.split('_')
+#             if ks[0].startswith('robot'):
+#                 robot_prefix_map[ks[0]].append(key)
+
+#     # generate relative pose
+#     # 각 로봇의 eef_pos + eef_rot_axis_angle 결합 후 matrix 변환 
+#     for robot_prefix in robot_prefix_map.keys():
+#         # convert pose to mat
+#         pose_mat = pose_to_mat(np.concatenate([
+#             env_obs[robot_prefix + '_eef_pos'],
+#             env_obs[robot_prefix + '_eef_rot_axis_angle']
+#         ], axis=-1))
+
+#         # solve reltaive obs, 현재 pose를 relative 좌표계로 변환 
+#         obs_pose_mat = convert_pose_mat_rep(
+#             pose_mat, 
+#             base_pose_mat=pose_mat[-1],
+#             pose_rep=obs_pose_repr,
+#             backward=False)
+
+#         obs_pose = mat_to_pose10d(obs_pose_mat)
+#         obs_dict_np[robot_prefix + '_eef_pos'] = obs_pose[...,:3]
+#         obs_dict_np[robot_prefix + '_eef_rot_axis_angle'] = obs_pose[...,3:]
+    
+#     # generate pose relative to other robot, 로봇 간 상대 pose 생성 
+#     n_robots = len(robot_prefix_map)
+
+#     # generate relative pose with respect to episode start
+#     # inference시 initial state 대비 변화량 추적 가능 
+#     if episode_start_pose is not None:
+#         for robot_id in range(n_robots):        
+#             # convert pose to mat
+#             pose_mat = pose_to_mat(np.concatenate([
+#                 env_obs[f'robot{robot_id}_eef_pos'],
+#                 env_obs[f'robot{robot_id}_eef_rot_axis_angle']
+#             ], axis=-1))
+            
+#             # get start pose
+#             start_pose = episode_start_pose[robot_id]
+#             start_pose_mat = pose_to_mat(start_pose)
+#             rel_obs_pose_mat = convert_pose_mat_rep(
+#                 pose_mat,
+#                 base_pose_mat=start_pose_mat,
+#                 pose_rep='relative',
+#                 backward=False)
+            
+#             rel_obs_pose = mat_to_pose10d(rel_obs_pose_mat)
+#             # obs_dict_np[f'robot{robot_id}_eef_pos_wrt_start'] = rel_obs_pose[:,:3]
+#             obs_dict_np[f'robot{robot_id}_eef_rot_axis_angle_wrt_start'] = rel_obs_pose[:,3:]
+
+#     return obs_dict_np
+
 def get_real_umi_obs_dict_single(
         env_obs: Dict[str, np.ndarray], 
         shape_meta: dict,
@@ -189,6 +318,7 @@ def get_real_umi_obs_dict_single(
         type = attr.get('type', 'low_dim') # RGB, low_dim data인지 구분 
         shape = attr.get('shape')
         if type == 'rgb': # image 데이터 size & shape 변환 
+            key = "camera0_rgb"  # single robot system에서 camera0_rgb만 사용 # 07/30
             this_imgs_in = env_obs[key]
             t,hi,wi,ci = this_imgs_in.shape
             co,ho,wo = shape
@@ -203,10 +333,22 @@ def get_real_umi_obs_dict_single(
                 if this_imgs_in.dtype == np.uint8:
                     out_imgs = out_imgs.astype(np.float32) / 255
             # THWC to TCHW
+            key = "left_wrist_img"  # single robot system에서 left_wrist_img로 변경 # 07/30
             obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
-        elif type == 'low_dim' and ('eef' not in key):  # eef를 제외한 low_dim data 복사 + robot_prefix_map에 로봇별 obs data mapping 
-            this_data_in = env_obs[key]
-            obs_dict_np[key] = this_data_in
+        # elif type == 'low_dim' and ('eef' not in key):  # eef를 제외한 low_dim data 복사 + robot_prefix_map에 로봇별 obs data mapping 
+        elif type == 'low_dim' and ('pose' not in key):  # eef를 제외한 low_dim data 복사 + robot_prefix_map에 로봇별 obs data mapping    # 07/31
+            if key == 'left_robot_gripper_width':  # single robot system에서 left_robot_gripper_width로 변경 # 07/30
+                this_data_in = env_obs[f'robot0_gripper_width']
+                obs_dict_np[key] = this_data_in
+                key = 'robot0_gripper_width'  # key를 robot0_gripper_width로 변경 # 07/30
+            elif key == 'left_robot_tcp_wrench':  # single robot system에서 left_robot_gripper_width로 변경 # 07/30
+                # this_data_in = env_obs[f'camera0_tactile_offset']
+                this_data_in = env_obs[f'camera0_force_offset']
+                obs_dict_np[key] = this_data_in
+                key = 'left_robot_tcp_wrench'  # key를 robot0_gripper_width로 변경 # 07/30
+            else:
+                this_data_in = env_obs[key]
+                obs_dict_np[key] = this_data_in
             # handle multi-robots
             ks = key.split('_')
             if ks[0].startswith('robot'):
@@ -227,38 +369,42 @@ def get_real_umi_obs_dict_single(
             base_pose_mat=pose_mat[-1],
             pose_rep=obs_pose_repr,
             backward=False)
-
+        base_pose_mat = pose_mat[-1]
+        base_pose = mat_to_pose10d(base_pose_mat)   # 07/30
         obs_pose = mat_to_pose10d(obs_pose_mat)
-        obs_dict_np[robot_prefix + '_eef_pos'] = obs_pose[...,:3]
-        obs_dict_np[robot_prefix + '_eef_rot_axis_angle'] = obs_pose[...,3:]
+        # obs_dict_np[robot_prefix + '_eef_pos'] = obs_pose[...,:3]
+        # obs_dict_np[robot_prefix + '_eef_rot_axis_angle'] = obs_pose[...,3:]
+        obs_dict_np['left_robot_tcp_pose'] = obs_pose[...,:9]   # 07/31
+        # obs_dict_np['base_pose'] = base_pose[...,:9]   # 07/30
+        
     
     # generate pose relative to other robot, 로봇 간 상대 pose 생성 
     n_robots = len(robot_prefix_map)
 
     # generate relative pose with respect to episode start
     # inference시 initial state 대비 변화량 추적 가능 
-    if episode_start_pose is not None:
-        for robot_id in range(n_robots):        
-            # convert pose to mat
-            pose_mat = pose_to_mat(np.concatenate([
-                env_obs[f'robot{robot_id}_eef_pos'],
-                env_obs[f'robot{robot_id}_eef_rot_axis_angle']
-            ], axis=-1))
+    # if episode_start_pose is not None:
+    #     for robot_id in range(n_robots):        
+    #         # convert pose to mat
+    #         pose_mat = pose_to_mat(np.concatenate([
+    #             env_obs[f'robot{robot_id}_eef_pos'],
+    #             env_obs[f'robot{robot_id}_eef_rot_axis_angle']
+    #         ], axis=-1))
             
-            # get start pose
-            start_pose = episode_start_pose[robot_id]
-            start_pose_mat = pose_to_mat(start_pose)
-            rel_obs_pose_mat = convert_pose_mat_rep(
-                pose_mat,
-                base_pose_mat=start_pose_mat,
-                pose_rep='relative',
-                backward=False)
+    #         # get start pose
+    #         start_pose = episode_start_pose[robot_id]
+    #         start_pose_mat = pose_to_mat(start_pose)
+    #         rel_obs_pose_mat = convert_pose_mat_rep(
+    #             pose_mat,
+    #             base_pose_mat=start_pose_mat,
+    #             pose_rep='relative',
+    #             backward=False)
             
-            rel_obs_pose = mat_to_pose10d(rel_obs_pose_mat)
-            # obs_dict_np[f'robot{robot_id}_eef_pos_wrt_start'] = rel_obs_pose[:,:3]
-            obs_dict_np[f'robot{robot_id}_eef_rot_axis_angle_wrt_start'] = rel_obs_pose[:,3:]
+    #         rel_obs_pose = mat_to_pose10d(rel_obs_pose_mat)
+    #         # obs_dict_np[f'robot{robot_id}_eef_pos_wrt_start'] = rel_obs_pose[:,:3]
+    #         obs_dict_np[f'robot{robot_id}_eef_rot_axis_angle_wrt_start'] = rel_obs_pose[:,3:]
 
-    return obs_dict_np
+    return obs_dict_np, base_pose   # 07/30
 
 # robot action을 real_env에서 사용할 수 있는 형식으로 변환
 # multi robot system에서 각 eef의 위치 및 자세 반영해 action 변환 

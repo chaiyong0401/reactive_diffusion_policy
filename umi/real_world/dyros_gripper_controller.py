@@ -11,7 +11,7 @@ from umi.real_world.wsg_binary_driver import WSGBinaryDriver
 from umi.real_world.dyros_binary_driver import DYROSBinaryDriver
 from umi.common.pose_trajectory_interpolator import PoseTrajectoryInterpolator
 
-
+from loguru import logger
 class Command(enum.Enum):
     SHUTDOWN = 0
     SCHEDULE_WAYPOINT = 1
@@ -170,7 +170,10 @@ class DYROSController(mp.Process):
                     dt = 1 / self.frequency
                     t_target = t_now
                     target_pos = pose_interp(t_target)[0]
-                    # print(f"target_pos:{target_pos}")
+                    # logger.info(f"original gripper target_pos:{target_pos}")
+                    # 08/07
+                    target_pos = target_pos - 3.0   # 약간 더 닫히게 (더 강하게 잡게)
+                    # logger.debug(f"modified gripper target pos: {target_pos}")
                     target_vel = (target_pos - pose_interp(t_target - dt)[0]) / dt
                     # print('controller target pos & vel: ', target_pos, target_vel)
 

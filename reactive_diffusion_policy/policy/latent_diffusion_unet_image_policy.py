@@ -103,22 +103,22 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         assert 'past_action' not in obs_dict  # not implemented yet
         # normalize input
         nobs = self.normalizer.normalize(obs_dict)  # 정규화된 obs
-        logger.debug(f"normalized observation:{nobs}")
-        logger.debug(f"Pixel value at [0, 0, 100, 100]: {nobs['left_wrist_img'][0, 0, 0, 100, 100]}")
-        logger.debug(f"Pixel value at [0, 0, 50, 50]: {nobs['left_wrist_img'][0, 0, 0, 50, 50]}")
-        logger.debug(f"Pixel value at [0, 0, 150, 150]: {nobs['left_wrist_img'][0, 0, 0, 150, 150]}")
+        # logger.debug(f"normalized observation:{nobs}")
+        # logger.debug(f"Pixel value at [0, 0, 100, 100]: {nobs['left_wrist_img'][0, 0, 0, 100, 100]}")
+        # logger.debug(f"Pixel value at [0, 0, 50, 50]: {nobs['left_wrist_img'][0, 0, 0, 50, 50]}")
+        # logger.debug(f"Pixel value at [0, 0, 150, 150]: {nobs['left_wrist_img'][0, 0, 0, 150, 150]}")
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
         T = self.horizon
         Da = self.action_dim
         Do = self.obs_feature_dim
         To = self.n_obs_steps
-        logger.info(f"B = {B}") # 1
-        logger.info(f"To = {To}")   #2
-        logger.info(f"self.horizon = {T}")  # 8
-        logger.info(f"action_dim = {Da}")   # 16
-        logger.info(f"obs_feature_dim = {Do}")  # 538
-        logger.info(f"n_obs_steps = {To}")  #   2
+        # logger.info(f"B = {B}") # 1
+        # logger.info(f"To = {To}")   #2
+        # logger.info(f"self.horizon = {T}")  # 8
+        # logger.info(f"action_dim = {Da}")   # 16
+        # logger.info(f"obs_feature_dim = {Do}")  # 538
+        # logger.info(f"n_obs_steps = {To}")  #   2
 
         # build input
         device = self.device
@@ -175,7 +175,7 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
                 temporal_cond = self.at.get_temporal_cond(extended_obs_dict)
                 temporal_cond = temporal_cond.to(self.device)
                 nsample = self.at.get_action_from_latent_with_temporal_cond(state_vq, temporal_cond)
-                logger.debug(f"nsample at get action: {nsample}")
+                # logger.debug(f"nsample at get action: {nsample}")
             else:
                 nsample = self.at.get_action_from_latent(state_vq)
 
@@ -188,11 +188,11 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio # (2*1)
         # get action
         start = To - 1 # (3)
-        logger.info(f"start = {start}")
+        # logger.info(f"start = {start}")
         # hack
         n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1  
         end = start + n_action_steps # 32
-        logger.info(f"end = {end}")
+        # logger.info(f"end = {end}")
         action = action_pred[:, start:end] #(32,29) # 동일한 latent(32dim) 29개
         # logger.debug(f"action = {action}")
         result = {
@@ -230,6 +230,10 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         end = start + n_action_steps    #(1+9)
         action = action_pred[:, start:end]
 
+        # logger.info(f"To: {To}, start: {start}, end: {end}, n_action_steps: {n_action_steps}")
+        # logger.info(f"original_horizon: {self.original_horizon}, dataset_obs_temporal_downsample_ratio: {dataset_obs_temporal_downsample_ratio}")
+        # logger.debug(f"action shape: {action.shape}, action: {action}")
+        # logger.debug(f"action_pred shape: {action_pred.shape}, action_pred: {action_pred}")
         result = {
             'action': action,
             'action_pred': action_pred

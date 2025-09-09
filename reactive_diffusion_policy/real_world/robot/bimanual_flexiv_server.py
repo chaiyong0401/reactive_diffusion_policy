@@ -16,67 +16,26 @@ from scipy.spatial.transform import Rotation as R
 
 from reactive_diffusion_policy.real_world.dyros_gripper.dyros_gripper_controller import DYROSController
 from reactive_diffusion_policy.real_world.dyros_gripper.dyros_binary_driver import DYROSBinaryDriver
-from reactive_diffusion_policy.common.space_utils import pose_6d_to_pose_7d, pose_6d_to_4x4matrix, matrix4x4_to_pose_6d
+from reactive_diffusion_policy.common.space_utils import pose_6d_to_pose_7d, pose_6d_to_4x4matrix, matrix4x4_to_pose_6d, mat_to_pose, pose_to_mat, mat_to_pose10d
 from typing import Any
 from reactive_diffusion_policy.common.pose_trajectory_interpolator import PoseTrajectoryInterpolator
 import sys
 logger.add(sys.stderr, level="DEBUG")
 
-def pos_rot_to_mat(pos, rot):
-    shape = pos.shape[:-1]
-    mat = np.zeros(shape + (4,4), dtype=pos.dtype)
-    mat[...,:3,3] = pos
-    mat[...,:3,:3] = rot.as_matrix()
-    mat[...,3,3] = 1
-    return mat
+tx_flangerot90_tip = np.identity(4)
+# tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.247])
+# tx_flangerot90_tip[:3, 3] = np.array([-0.0786, 0, 0.247])
+tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.247]) # fixed 
+# self.tx_flangerot90_tip[:3, 3] = np.array([0.0, 0.0628, 0.247]) 
 
-def pose_to_pos_rot(pose):
-    pose = np.array(pose)
-    pos = pose[...,:3]
-    rot = st.Rotation.from_rotvec(pose[...,3:])
-    return pos, rot
+tx_flangerot45_flangerot90 = np.identity(4)
+tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
 
-def pos_rot_to_pose(pos, rot):
-    shape = pos.shape[:-1]
-    pose = np.zeros(shape+(6,), dtype=pos.dtype)
-    pose[...,:3] = pos
-    pose[...,3:] = rot.as_rotvec()
-    return pose
+tx_flange_flangerot45 = np.identity(4)
+tx_flange_flangerot45[:3,:3] = st.Rotation.from_euler('z', [np.pi/4]).as_matrix()
 
-def mat_to_pos_rot(mat):
-    # logger.info(f"mat = {mat}")
-    pos = (mat[...,:3,3].T / mat[...,3,3].T).T
-    rot = st.Rotation.from_matrix(mat[...,:3,:3])
-    return pos, rot
-
-def pose_to_mat(pose):
-    return pos_rot_to_mat(*pose_to_pos_rot(pose))
-
-def mat_to_pose(mat):
-    return pos_rot_to_pose(*mat_to_pos_rot(mat))
-
-# def pose_6d_to_7d(pose_6d: List[float]) -> List[float]:
-#     assert len(pose_6d) == 6, "Input must be a 6D pose (x, y, z, roll, pitch, yaw)"
-#     x, y, z, rx, ry, rz = pose_6d
-#     rotvec = [rx, ry, rz]
-#     quat = st.Rotation.from_rotvec(rotvec).as_quat()  #  (x, y, z, w)
-#     quat = np.roll(quat, 1)  # to (w, x, y, z)
-#     return [x, y, z] + quat.tolist()
-
-# tx_flangerot90_tip = np.identity(4)
-# # tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.247])
-# # tx_flangerot90_tip[:3, 3] = np.array([-0.0786, 0, 0.247])
-# tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.247]) # fixed 
-
-# tx_flangerot45_flangerot90 = np.identity(4)
-# tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
-
-# tx_flange_flangerot45 = np.identity(4)
-# tx_flange_flangerot45[:3,:3] = st.Rotation.from_euler('z', [np.pi/4]).as_matrix()
-
-# self.tx_flange_tip = tx_flange_flangerot45 @ tx_flangerot45_flangerot90 @tx_flangerot90_tip
-# self.tx_tip_flange = np.linalg.inv(self.tx_flange_tip)
-
+tx_flange_tip = tx_flange_flangerot45 @ tx_flangerot45_flangerot90 @ tx_flangerot90_tip # 좌표계 변환 후 translation
+tx_tip_flange = np.linalg.inv(tx_flange_tip)
 
 class FrankaInterface:
     # def __init__(self, ip='172.16.0.3', port=4242): # server(nuc)의 ip + port 
@@ -94,32 +53,18 @@ class FrankaInterface:
         # self.curr_pose = None
         # self.last_waypoint_time = None
 
-        self.tx_flangerot90_tip = np.identity(4)
-        # tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.247])
-        # tx_flangerot90_tip[:3, 3] = np.array([-0.0786, 0, 0.247])
-        self.tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.207]) # fixed 
-        # self.tx_flangerot90_tip[:3, 3] = np.array([0.0, 0.0628, 0.247]) 
-
-        self.tx_flangerot45_flangerot90 = np.identity(4)
-        self.tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
-
-        self.tx_flange_flangerot45 = np.identity(4)
-        self.tx_flange_flangerot45[:3,:3] = st.Rotation.from_euler('z', [np.pi/4]).as_matrix()
-
-        self.tx_flange_tip = self.tx_flange_flangerot45 @ self.tx_flangerot45_flangerot90 @ self.tx_flangerot90_tip # 좌표계 변환 후 translation
-        # self.tx_flange_tip = (
-        #     self.tx_flangerot90_tip
-        #     @ self.tx_flangerot45_flangerot90
-        #     @ self.tx_flange_flangerot45
-        # )
-        self.tx_tip_flange = np.linalg.inv(self.tx_flange_tip)
 
     def get_ee_pose(self):  # pos + rotvec
         flange_pose = np.array(self.server.get_ee_pose())
-        logger.info(f"flange_pose: {flange_pose}")
+        # logger.info(f"flange_pose: {flange_pose}")
         # logger.debug(f"pose_to_mat(flange_pose): {pose_to_mat(flange_pose)}")
         # logger.debug(f"tx_flange_tip = {self.tx_flange_tip}")
-        tip_pose = mat_to_pose(pose_to_mat(flange_pose) @ self.tx_flange_tip)
+        tip_pose = mat_to_pose(pose_to_mat(flange_pose) @ tx_flange_tip)
+        flange_recover = mat_to_pose(pose_to_mat(tip_pose)@ tx_tip_flange)
+        # logger.info(f"flange_pose_recover(tip->flange): {flange_recover}")
+        # logger.info(f"flange_pose_9d: {mat_to_pose10d(pose_to_mat(flange_pose))}")
+        # logger.debug(f"flange_pose_recover_9d: {mat_to_pose10d(pose_to_mat(tip_pose)@tx_tip_flange)}")
+        # logger.debug(f"tip_pose_9d: {mat_to_pose10d(pose_to_mat(flange_pose) @ tx_flange_tip)}")
         # pos = flange_pose[:3] + np.array([0.247, 0.0, -0.0628]) #07/09
         # rot = flange_pose[3:]  # 그대로 유지
         # tip_pose = np.concatenate([pos, rot])
@@ -148,7 +93,7 @@ class FrankaInterface:
         )
     
     def update_desired_ee_pose(self, pose: np.ndarray):
-        logger.debug(f"update_desired_ee_pose: {pose}")
+        # logger.debug(f"update_desired_ee_pose: {pose}")
         if isinstance(pose, list): 
             pose = np.array(pose)
         # pose = mat_to_pose(pose_to_mat(pose) @ tx_tip_flange)
@@ -191,25 +136,20 @@ class BimanualFlexivServer():
         # self.left_robot.gripper.move(0.1, 10, 0)
         # self.right_robot.gripper.move(0.1, 10, 0)
 
-        self.tx_flangerot90_tip = np.identity(4)
-        # tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.247])
-        # tx_flangerot90_tip[:3, 3] = np.array([-0.0786, 0, 0.247])
-        self.tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.207]) # fixed 
-        # self.tx_flangerot90_tip[:3, 3] = np.array([0.0, 0.0628, 0.247])
+        # self.tx_flangerot90_tip = np.identity(4)
+        # # tx_flangerot90_tip[:3, 3] = np.array([-0.0336, 0, 0.247])
+        # # tx_flangerot90_tip[:3, 3] = np.array([-0.0786, 0, 0.247])
+        # self.tx_flangerot90_tip[:3, 3] = np.array([-0.0628, 0, 0.247]) # fixed 
+        # # self.tx_flangerot90_tip[:3, 3] = np.array([0.0, 0.0628, 0.247])
 
-        self.tx_flangerot45_flangerot90 = np.identity(4)
-        self.tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
+        # self.tx_flangerot45_flangerot90 = np.identity(4)
+        # self.tx_flangerot45_flangerot90[:3,:3] = st.Rotation.from_euler('x', [np.pi/2]).as_matrix()
 
-        self.tx_flange_flangerot45 = np.identity(4)
-        self.tx_flange_flangerot45[:3,:3] = st.Rotation.from_euler('z', [np.pi/4]).as_matrix()
+        # self.tx_flange_flangerot45 = np.identity(4)
+        # self.tx_flange_flangerot45[:3,:3] = st.Rotation.from_euler('z', [np.pi/4]).as_matrix()
 
-        self.tx_flange_tip = self.tx_flange_flangerot45 @ self.tx_flangerot45_flangerot90 @ self.tx_flangerot90_tip
-        # self.tx_flange_tip = (
-        #     self.tx_flangerot90_tip
-        #     @ self.tx_flangerot45_flangerot90
-        #     @ self.tx_flange_flangerot45
-        # )
-        self.tx_tip_flange = np.linalg.inv(self.tx_flange_tip)
+        # self.tx_flange_tip = self.tx_flange_flangerot45 @ self.tx_flangerot45_flangerot90 @ self.tx_flangerot90_tip
+        # self.tx_tip_flange = np.linalg.inv(self.tx_flange_tip)
 
         if use_planner:
             # TODO: support bimanual planner
@@ -266,32 +206,14 @@ class BimanualFlexivServer():
 
             left_robot_pose_state = self.left_robot.get_ee_pose()
             quat = R.from_rotvec(left_robot_pose_state[3:]).as_quat()  # (x, y, z, w)
+            
             quat = np.roll(quat, 1)  # → (w, x, y, z)
             left_robot_pose = np.concatenate([left_robot_pose_state[:3], quat])
-            logger.info(f"left_robot_pose = {left_robot_pose}")
-            # print("left_robot_gripper_state: ", left_robot_gripper_state)
-            # print("leftrobottcp: ", self.left_robot.get_ee_pose())
-            # right_robot_gripper_state = self.right_robot.get_current_gripper_states()
-            # return BimanualRobotStates(leftRobotTCP=left_robot_state.tcpPose,
-            #                            rightRobotTCP=right_robot_state.tcpPose,
-            #                            leftRobotTCPVel=left_robot_state.tcpVel,
-            #                            rightRobotTCPVel=right_robot_state.tcpVel,
-            #                            leftRobotTCPWrench=left_robot_state.extWrenchInTcp,
-            #                            rightRobotTCPWrench=right_robot_state.extWrenchInTcp,
-            #                            leftGripperState=[left_robot_gripper_state.width,
-            #                                                 left_robot_gripper_state.force],
-            #                            rightGripperState=[right_robot_gripper_state.width,
-            #                                                      right_robot_gripper_state.force])
-            # left_tcp = self.left_robot.get_ee_pose().tolist()
-            # left_q = self.left_robot.get_joint_positions().tolist()
-            # Placeholder wrench and gripper info
+            # logger.info(f"left_robot_pose = {left_robot_pose}")
 
             return BimanualRobotStates(
-                # leftRobotTCP=self.left_robot.get_ee_pose(),
-                # rightRobotTCP=left_tcp,
-                # leftRobotTCP=[0.0]*7,
-                # leftRobotTCP = pose_6d_to_pose_7d(self.left_robot.get_ee_pose()), #(pos + rotvec) -> (x,y,z,qw,qx,qy,qz)
                 leftRobotTCP = left_robot_pose, #(pos + rotvec) -> (x,y,z,qw,qx,qy,qz)
+                # leftRobotTCP = left_robot_pose_state, #(pos + rotvec)  # 07/11 6d pose
                 rightRobotTCP=[0.0]*7,
                 leftRobotTCPVel=[0.0]*6,
                 rightRobotTCPVel=[0.0]*6,
@@ -314,7 +236,8 @@ class BimanualFlexivServer():
             #                f"with velocity {request.velocity} and force limit {request.force_limit}"}
 
             # self.left_gripper.move_to(0.01, duration=0.5)
-            self.left_gripper.move_to(request.width, duration=0.5)
+            logger.debug(f"gripper_command: {request.width}")
+            self.left_gripper.move_to(request.width, duration=10)
             return {
                 "message": f"{robot_side.capitalize()} gripper moving to width {request.width} "
                            f"with velocity {request.velocity} and force limit {request.force_limit}"}
@@ -354,26 +277,14 @@ class BimanualFlexivServer():
             try:
                 print(f"request.target_tcp= {request.target_tcp}") # (pos + rotvec)
                 target_tcp_array = np.array(request.target_tcp)
-                flange_pose = mat_to_pose(pose_to_mat(target_tcp_array) @ self.tx_tip_flange)
-                # 직접 변환: pos -= offset
-                # pos = target_tcp_array[:3] - np.array([0.247, 0.0, -0.0628])    # 07/09
-                # rot = target_tcp_array[3:]
-                # flange_pose = np.concatenate([pos, rot])
+                flange_pose = mat_to_pose(pose_to_mat(target_tcp_array) @ tx_tip_flange)
+                # logger.debug(f"taget_tcp_array: {mat_to_pose10d(pose_to_mat(target_tcp_array))}")
+                # logger.debug(f"taget_flagne_pose: {mat_to_pose10d(pose_to_mat(target_tcp_array)@ tx_tip_flange)}")
+                
 
-                # pos = target_tcp_array[:3] + np.array([0.009,0.0,0.006])
-                # rot = target_tcp_array[3:]
-                # flange_pose =np.concatenate([pos,rot])
-                # print(self.tx_tip_flange)
-                # print(self.tx_flange_tip)
-                ###################################3
-                # T_flange = pose_to_mat(request.target_tcp) @ tx_tip_flange
-                # T_flange_transformed = T_desired_current @ T_flange
-                # flange_pose = mat_to_pose(T_flange_transformed)
-                #################################
-
+                # logger.debug(f"target_tcp_array_tip_pose: {target_tcp_array}")
+                # logger.debug(f"update_desired_ee_flange_pose: {flange_pose}")
                 robot.update_desired_ee_pose(np.array(flange_pose))   # 07/07 pose update
-                logger.debug(f"update_desired_ee_flange_pose: {flange_pose}")
-                logger.debug(f"target_tcp_array_tip_pose: {target_tcp_array}")
                 
                 # return {"message": f"{robot_side.capitalize()} robot moving to target tcp {request.target_tcp}"}
                 return {"message": f"{robot_side.capitalize()} robot moving to target tcp", "target_tcp": request.target_tcp}
@@ -383,12 +294,10 @@ class BimanualFlexivServer():
 
             # robot.tcp_move(request.target_tcp)
             target_tcp_array = np.array(request.target_tcp)
-            flange_pose = mat_to_pose(pose_to_mat(target_tcp_array)@ self.tx_tip_flange)
+            flange_pose = mat_to_pose(pose_to_mat(target_tcp_array)@ tx_tip_flange)
             # pos = target_tcp_array[:3] - np.array([0.247, 0.0, -0.0628])    # 07/09
             # rot = target_tcp_array[3:]
             # flange_pose = np.concatenate([pos, rot])
-            logger.info(f"update_desired_ee_flange_pose2: {flange_pose}")
-            logger.info(f"target_tcp_array_tip_pose2: {target_tcp_array}")
             robot.update_desired_ee_pose(np.array(flange_pose))   # 07/07 pose update
             # logger.debug(f"{robot_side.capitalize()} robot moving to target tcp {request.target_tcp}")
             return {"message": f"{robot_side.capitalize()} robot moving to target tcp {request.target_tcp}"}

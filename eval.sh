@@ -25,7 +25,7 @@ python eval_real_robot_flexiv.py \
       task=real_umi_image_xela_wrench_ldp_24fps \
       +task.env_runner.output_dir=/home/embodied-ai/mcy/reactive_diffusion_policy_umi/saving_video \
       at=at_peel \
-      +ckpt_path="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.09/22.10.34_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0709221032/checkpoints/latest.ckpt" \
-      at_load_dir="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.09/20.30.26_train_vae_real_umi_image_xela_wrench_at_24fps_0709203026/checkpoints/latest.ckpt"
+      +ckpt_path="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.25/23.43.27_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0725234325/checkpoints/latest.ckpt" \
+      at_load_dir="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.25/21.23.35_train_vae_real_umi_image_xela_wrench_at_24fps_0725212334/checkpoints/latest.ckpt"
       # +ckpt_path="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.05/19.52.59_train_latent_diffusion_unet_image_real_umi_image_xela_wrench_ldp_24fps_0705195257/checkpoints/latest.ckpt" \
       # at_load_dir="/home/embodied-ai/mcy/reactive_diffusion_policy_umi/data/outputs/2025.07.05/18.46.09_train_vae_real_umi_image_xela_wrench_at_24fps_0705184608/checkpoints/latest.ckpt"

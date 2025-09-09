@@ -21,11 +21,15 @@ shape_meta: &shape_meta
       shape: [1]
       type: low_dim
     left_robot_tcp_wrench:
-      shape: [ 6 ] # 07/05 obs tactile 6 
+    # 08/07 3dtacdex3d
+      # shape: [ 16 ] # 
+      shape: [ 48 ] # 
       type: low_dim
   extended_obs: # for the AT RNN decoder of the latent diffusion policy
     left_robot_tcp_wrench:
-      shape: [ 6 ] # 07/05 obs tactile 6
+    # 08/07 3dtacdex3d
+      # shape: [ 16 ] # 
+      shape: [ 48 ] # 
       type: low_dim
   action:
     shape: [10] # (3+6+1) (x, y, z, 6d rotation, gripper_width) # 07/06
@@ -33,9 +37,9 @@ shape_meta: &shape_meta
 env_runner:
   _target_: reactive_diffusion_policy.env_runner.real_runner.RealRunner
   eval_episodes: 10
-  max_duration_time: 30
-  tcp_action_update_interval: 24 # 16
-  gripper_action_update_interval: 24 # 16
+  max_duration_time: 90
+  tcp_action_update_interval: 8 # 16
+  gripper_action_update_interval: 8 # 16
   tcp_pos_clip_range: # no clip for x, y, clip for z
     - [ -100, -100, 0.13 ]
     - [ 100, 100, 1.0 ]
@@ -45,10 +49,10 @@ env_runner:
   tcp_rot_clip_range: # no clip, mcy change
     - [ -1.54159, -1.54, -1.54159 ]
     - [ 1.54159, 1.54, 1.54159 ]
-  latency_step: 4
-  gripper_latency_step: 4
-  control_fps: 24
-  inference_fps: 6
+  latency_step: 0
+  gripper_latency_step: 0
+  control_fps: 12 #24 07/15
+  inference_fps: 3  #6 07/15
   n_obs_steps: ${n_obs_steps}
   obs_temporal_downsample_ratio: ${obs_temporal_downsample_ratio}
   dataset_obs_temporal_downsample_ratio: ${dataset_obs_temporal_downsample_ratio}

@@ -37,6 +37,8 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         action_dim = action_shape[0]
         # get feature dim
         obs_feature_dim = obs_encoder.output_shape()[0]
+        # # 08/07 3dtacdex3d
+        # obs_feature_dim = obs_feature_dim + 64
 
         # create diffusion model
         input_dim = action_dim + obs_feature_dim

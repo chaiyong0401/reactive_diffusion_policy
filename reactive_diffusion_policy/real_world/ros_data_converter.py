@@ -7,7 +7,7 @@ import copy
 from typing import Dict, Tuple, List, Optional
 from loguru import logger
 from cv_bridge import CvBridge
-from reactive_diffusion_policy.common.space_utils import ros_pose_to_6d_pose
+from reactive_diffusion_policy.common.space_utils import ros_pose_to_6d_pose, ros_pose_to_6d_pose_mcy_rotvec
 from reactive_diffusion_policy.common.data_models import SensorMessage
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
 from reactive_diffusion_policy.common.visualization_utils import visualize_pcd_from_numpy, visualize_rgb_image
@@ -94,7 +94,8 @@ class ROS2DataConverter:
             # right_tcp_wrench_array = np.array(right_tcp_wrench.data) if right_tcp_wrench is not None else np.zeros(16, dtype=np.float32)
 
 
-        left_tcp_pose_array = ros_pose_to_6d_pose(left_tcp_pose.pose)
+        # left_tcp_pose_array = ros_pose_to_6d_pose(left_tcp_pose.pose)
+        left_tcp_pose_array = ros_pose_to_6d_pose_mcy_rotvec(left_tcp_pose.pose)
         # logger.info(f"left_tcp_pose_in_convert_robot_states: {left_tcp_pose_array}")
         right_tcp_pose_array = ros_pose_to_6d_pose(right_tcp_pose.pose)
 
@@ -169,10 +170,10 @@ class ROS2DataConverter:
         """Decode tactile forces from custom Xela sensor message."""
         left_taxels = np.zeros(16, dtype=np.float32)
         right_taxels = np.zeros(16, dtype=np.float32)
-        offset = np.array([
-            -27.0, 21.0, 3.0, 0.0, -7.0, -17.0, -12.0, -19.0,
-            -15.0, 3.0, 2.0, 1.0, 9.0, 2.0, 20.0, -7.0
-        ], dtype=np.float32)
+        # offset = np.array([
+        #     -27.0, 21.0, 3.0, 0.0, -7.0, -17.0, -12.0, -19.0,
+        #     -15.0, 3.0, 2.0, 1.0, 9.0, 2.0, 20.0, -7.0
+        # ], dtype=np.float32)
 
         try:
             # mean = self.xela_taxel_mean  # shape (16,)
@@ -188,7 +189,7 @@ class ROS2DataConverter:
                     values.extend([0.0] * pad)
                 array_values = np.array(values,dtype=np.float32)
                 # normed_values = (np.array(values, dtype=np.float32) - mean) / (std + 1e-8)
-                corrected_values = array_values + offset
+                corrected_values = array_values  #+ offset
                 # left_taxels = normed_values
                 # right_taxels = normed_values
                 left_taxels = corrected_values

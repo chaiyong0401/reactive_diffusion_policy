@@ -7,7 +7,7 @@ def get_real_obs_dict(
         env_obs: Dict[str, np.ndarray], 
         shape_meta: dict,
         is_extended_obs: bool = False,
-        use_constant_rgb: bool = False, # 07/07 
+        use_constant_rgb: bool = True, # 07/07 
         constant_rgb_value: float = 0.5  # 07/07
         ) -> Dict[str, np.ndarray]:
     obs_dict_np = dict()
@@ -34,10 +34,13 @@ def get_real_obs_dict(
                     out_imgs = out_imgs.astype(np.float32) / 255
             # THWC to TCHW
             # obs_dict_np[key] = np.moveaxis(out_imgs,-1,1)
+            # logger.info(f"get_real_obs_dict_rgb_size before axis change: {out_imgs.shape}")
             obs_dict_np[key] = np.moveaxis(out_imgs, -1, 1) # 07/07
-            logger.info(f"get_real_obs_dict_rgb_size: {obs_dict_np[key].shape}")
+            # logger.info(f"get_real_obs_dict_rgb_size: {obs_dict_np[key].shape}")
+            # logger.debug(f"get_real_obs_dict (rgb): {obs_dict_np[key]}")
             if use_constant_rgb:
                 obs_dict_np[key][...] = constant_rgb_value
+                # logger.debug(f"get_real_obs_dict (constant_rgb): {obs_dict_np[key]}")
         elif type == 'low_dim':
             if "wrt" in key:
                 continue

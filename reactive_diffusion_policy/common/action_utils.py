@@ -7,6 +7,7 @@ from reactive_diffusion_policy.common.space_utils import (
 )
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
 from loguru import logger
+from umi.common.pose_util import pose10d_to_mat, mat_to_pose10d
 
 def interpolate_actions_with_ratio(actions: np.ndarray, N: int):
     """
@@ -84,14 +85,23 @@ def absolute_actions_to_relative_actions(actions: np.ndarray, base_absolute_acti
         assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
         # logger.debug(f"base_absolute_action_9d: {base_absolute_action}")
         # logger.debug(f"actions_9d: {actions}")
-        base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
+        # base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
+        base_tcp_pose_mat = pose10d_to_mat(base_absolute_action[None,tcp_dim]) # 07/11
+        # logger.debug(f"absolute to relative base: {base_tcp_pose_mat}")   # 07/11
+
         # logger.debug(f"##############################################################################")
         # logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
         # logger.debug(f"actions: {actions}")
         # logger.debug(f"actions_mat: {pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
         # logger.debug(f"relative_mat: {np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(actions[:, tcp_dim])}")
-        actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(
-            actions[:, tcp_dim]))[:, :len(tcp_dim)]
+        # actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(np.linalg.inv(base_tcp_pose_mat) @ pose_3d_9d_to_homo_matrix_batch(
+        #     actions[:, tcp_dim]))[:, :len(tcp_dim)]
+
+        # logger.debug(f"actions_mat: {pose10d_to_mat(actions[:, tcp_dim])}")    # 07/11
+        # logger.debug(f"relative_mat: {np.linalg.inv(base_tcp_pose_mat) @ pose10d_to_mat(actions[:, tcp_dim])}")# 07/11
+        actions[:, tcp_dim] = mat_to_pose10d(np.linalg.inv(base_tcp_pose_mat)@ pose10d_to_mat(actions[:,tcp_dim]))[:,:len(tcp_dim)]# 07/11
+        # logger.debug(f"action after: {actions}")
+
 
     return actions
 
@@ -109,20 +119,23 @@ def relative_actions_to_absolute_actions(actions: np.ndarray, base_absolute_acti
         tcp_dim_list = [np.arange(9), np.arange(9, 18)]
     else:
         raise NotImplementedError
-
+    logger.debug(f"actions shape: {actions.shape}, base_absolute_action shape: {base_absolute_action.shape}")
     for tcp_dim in tcp_dim_list:
         assert len(tcp_dim) == 3 or len(tcp_dim) == 9, "Only support 3D or 9D tcp pose now"
-        base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
-        logger.debug(f"######################relative to absolute########################################################")
-        logger.debug(f"base_tcp_action: {base_absolute_action}")
-        logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
-        logger.debug(f"actions: {actions}")
+        # base_tcp_pose_mat = pose_3d_9d_to_homo_matrix_batch(base_absolute_action[None, tcp_dim])
+        # logger.debug(f"######################relative to absolute########################################################")
+        # logger.debug(f"base_tcp_action: {base_absolute_action}")
+        # logger.debug(f"base_tcp_pose_mat: {base_tcp_pose_mat}")
+        # logger.debug(f"actions: {actions}")
         # actions[:, tcp_dim[:3]] *= -1 # 07/07
         # logger.debug(f"actions: {actions}")
-        actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(base_tcp_pose_mat @ pose_3d_9d_to_homo_matrix_batch(
-            actions[:, tcp_dim]))[:, :len(tcp_dim)]
-        logger.debug(f"actions: {actions}")
-
+        # actions[:, tcp_dim] = homo_matrix_to_pose_9d_batch(base_tcp_pose_mat @ pose_3d_9d_to_homo_matrix_batch(
+        #     actions[:, tcp_dim]))[:, :len(tcp_dim)]
+        logger.debug(f"actions shape: {actions.shape}")
+        base_tcp_pose_mat = pose10d_to_mat(base_absolute_action[None,tcp_dim]) # 07/11
+        actions[:,tcp_dim] = mat_to_pose10d(base_tcp_pose_mat @ pose10d_to_mat(actions[:,tcp_dim]))[:,:len(tcp_dim)] # 07/11
+        logger.debug(f"actions shape2: {actions.shape}")
+    logger.debug(f"actions_final_shape: {actions.shape}")
     return actions
 
 def get_inter_gripper_actions(obs_dict, lowdim_keys: dict, transforms: RealWorldTransforms):

@@ -8,6 +8,7 @@ from reactive_diffusion_policy.common.data_models import SensorMessage, SensorMo
 from reactive_diffusion_policy.common.visualization_utils import visualize_pcd_from_numpy, visualize_rgb_image
 from reactive_diffusion_policy.common.space_utils import pose_6d_to_4x4matrix, pose_6d_to_pose_9d
 from reactive_diffusion_policy.model.common.pca_embedding import PCAEmbedding
+from umi.common.pose_util import pose_to_mat, mat_to_pose10d
 from omegaconf import DictConfig
 
 class DataPostProcessingManager:
@@ -55,8 +56,10 @@ class DataPostProcessingManager:
 
         if self.use_6d_rotation:
             # logger.debug(f"pose_6d before using pose_6d_to_pose_9d {sensor_msg.leftRobotTCP}")
-            obs_dict['left_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.leftRobotTCP)
-            obs_dict['right_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.rightRobotTCP)
+            # obs_dict['left_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.leftRobotTCP)
+            # obs_dict['right_robot_tcp_pose'] = pose_6d_to_pose_9d(sensor_msg.rightRobotTCP)
+            obs_dict['left_robot_tcp_pose'] = mat_to_pose10d(pose_to_mat(sensor_msg.leftRobotTCP))   # 07/11
+            obs_dict['right_robot_tcp_pose'] = mat_to_pose10d(pose_to_mat(sensor_msg.rightRobotTCP)) # 07/11
 
         if self.debug:
             logger.debug(f'left_robot_tcp_pose: {obs_dict["left_robot_tcp_pose"]}, '
