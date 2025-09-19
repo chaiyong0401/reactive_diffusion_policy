@@ -662,7 +662,7 @@ class UmiEnv:
         data_batch = data_batch.to(device)
         latent_output = self.encoder(data_batch.x, data_batch.edge_index)
         latent_output = latent_output.view(2, -1)   # (batch_size, feature_dim)
-        logger.debug(f"[DEBUG] latent_output shape: {latent_output.shape}")
+        # logger.debug(f"[DEBUG] latent_output shape: {latent_output.shape}")
         tactile_obs = {
             'camera0_force_offset': latent_output.cpu().numpy() 
         }
@@ -897,8 +897,8 @@ class UmiEnv:
         # compensate_latency = 0.1
         self.robot_action_latency = 0.0 # 08/07
         self.gripper_action_latency = -1.5
-        logger.info(f"Compensate latency: {self.robot_action_latency} ")
-        logger.info(f"gripper latency: {self.gripper_action_latency}")
+        # logger.info(f"Compensate latency: {self.robot_action_latency} ")
+        # logger.info(f"gripper latency: {self.gripper_action_latency}")
         r_latency = self.robot_action_latency if compensate_latency else 0.0
         # r_latency = 0.0
         g_latency = self.gripper_action_latency if compensate_latency else 0.0
@@ -907,8 +907,8 @@ class UmiEnv:
         # g_latency = 2 * 0.1 
         r_ts = new_timestamps - r_latency 
         g_ts = new_timestamps - g_latency 
-        logger.debug(f"r_ts1: {r_ts}, g_ts: {g_ts}")
-        logger.info(f"keep time: {max(self._last_sched_wall_time_robot + margin, time.time() + margin)}")
+        # logger.debug(f"r_ts1: {r_ts}, g_ts: {g_ts}")
+        # logger.info(f"keep time: {max(self._last_sched_wall_time_robot + margin, time.time() + margin)}")
         with self._wp_lock:
             group_id = self._wp_group_id
             self._wp_group_id += 1
@@ -916,12 +916,12 @@ class UmiEnv:
             eps = 1e-3
             keep = r_ts > max(self._last_sched_wall_time_robot + eps, time.time() + margin)
             new_actions = new_actions[keep]
-            logger.debug(f"r_ts2: {r_ts}, g_ts: {g_ts}, keep: {keep}")
+            # logger.debug(f"r_ts2: {r_ts}, g_ts: {g_ts}, keep: {keep}")
             r_ts = r_ts[keep]
             g_ts = g_ts[keep]
-            logger.debug(f"new_actions.shape: {new_actions.shape}, r_ts: {r_ts.shape}, g_ts: {g_ts.shape}")
-            logger.debug(f"last_sched_wall_time_robot: {self._last_sched_wall_time_robot} ")
-            logger.debug(f"r_ts: {r_ts}")
+            # logger.debug(f"new_actions.shape: {new_actions.shape}, r_ts: {r_ts.shape}, g_ts: {g_ts.shape}")
+            # logger.debug(f"last_sched_wall_time_robot: {self._last_sched_wall_time_robot} ")
+            # logger.debug(f"r_ts: {r_ts}")
 
             for i in range(len(new_actions)):
                 r_actions = new_actions[i,:6]   # 6D pose
@@ -1474,6 +1474,30 @@ class UmiEnv:
         X_wp_s  = interp_wp(ts_common)
         X_act_s = interp_act(ts_common)
 
+        # txt 저장
+        # 절대 시간 대신 상대 시간으로 변환
+        ts_rel = ts_common - ts_common[0]
+        save_dir = "/home/embodied-ai/mcy"
+        save_dir = pathlib.Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        from scipy.spatial.transform import Rotation as R  # 안전: CUDA와 무관
+        quat_wp = R.from_rotvec(X_wp_s[:,3:]).as_quat()   # (N,4)
+        quat_act = R.from_rotvec(X_act_s[:,3:]).as_quat() # (N,4)
+
+        # wp_data = np.hstack([ts_common[:,None], X_wp_s[:,:3], quat_wp])  # (N, 8)
+        act_data = np.hstack([ts_common[:,None], X_act_s[:,:3], quat_act])  # (N, 8)
+
+        wp_data = np.hstack([ts_rel[:,None], X_wp_s[:,:3], quat_wp])
+        act_data = np.hstack([ts_rel[:,None], X_act_s[:,:3], quat_act])
+
+        # === txt 저장 ===
+        np.savetxt(save_dir/"waypoints_aligned_quat.txt", wp_data,
+                header="t x y z qx qy qz qw", fmt="%.6f")
+        np.savetxt(save_dir/"actual_aligned_quat.txt", act_data,
+                header="t x y z qx qy qz qw", fmt="%.6f")
+
+        logger.info(f"[aligned] Saved txt files to {save_dir}")
 
         # error 분석
         err = X_wp_s[:,:6] - X_act_s[:,:6] # position error

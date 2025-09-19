@@ -75,6 +75,36 @@ class FrankaInterface:  # server가 돌아가는 nuc <-> client가 돌아가는 
     def close(self):
         self.server.close()
 
+class FrankaInterface_cycontroller:
+    def __init__(self, ip='10.0.0.2', port=4242):
+        self.server = zerorpc.Client(heartbeat=20)
+        self.server.connect(f"tcp://{ip}:{port}")
+    
+    def get_ee_pose(self):
+        flange_pose_list = self.server.get_ee_pose()
+        flange_pose_matrix = np.array(flange_pose_list).reshape(4, 4, order='F')
+        position = flange_pose_matrix[:3, 3]
+        rotation_matrix = flange_pose_matrix[:3, :3]
+        r = st.Rotation.from_matrix(rotation_matrix)
+        rotvec = r.as_rotvec()
+        pose_6d = np.concatenate([position, rotvec]).tolist()
+        tip_pose = mat_to_pose(pose_to_mat(pose_6d) @ tx_flange_tip)
+        return tip_pose
+    
+    def update_desired_ee_pose(self, pose: np.ndarray):
+        flange_pose = mat_to_pose(pose_to_mat(pose) @ tx_tip_flange)
+        self.server.update_desired_ee_pose(flange_pose)
+
+    def send_ee_trajectory(self, waypoints):
+        waypoints_flange = []
+        for wp in waypoints:
+            wp = np.array(wp)
+            flange_pose = mat_to_pose(pose_to_mat(wp[:6]) @ tx_tip_flange)
+            wp_flange = np.concatenate([flange_pose, wp[6:]])
+            waypoints_flange.append(wp_flange.tolist())
+        return self.server.send_ee_trajectory(waypoints_flange)
+
+
 
 class FrankaInterpolationController(mp.Process):
     """
@@ -313,16 +343,7 @@ class FrankaInterpolationController(mp.Process):
             while keep_running:
                 # send command to robot
                 t_now = time.monotonic()
-                # diff = t_now - pose_interp.times[-1]
-                # if diff > 0:
-                #     print('extrapolate', diff)
                 tip_pose = pose_interp(t_now) # t_now의 보간된 tip 위치 call
-                # print(f"t_now: {t_now}")
-                # 08/07
-                # if tip_pose[1] > 0.24 :  # y축 방향 너무 벗어나지 않도록 or tip_pose[0] < 0.625
-                #     tip_pose[0] += 0.008  # 약간 더 forward (x축 방향)  # 08/07
-                #     tip_pose[2] += -0.005  # 약간 더 위로 (z축 방향)  # 08/07
-                    # logger.debug(f"modified tip_pose: {tip_pose}")
                 # logger.info(f"original tip_pose: {tip_pose}")
                 # flange_pose = mat_to_pose(pose_to_mat(tip_pose) @ tx_tip_flange)
                 # logger.debug(f"original flange_pose: {flange_pose}")

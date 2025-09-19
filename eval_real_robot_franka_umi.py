@@ -142,150 +142,17 @@ from reactive_diffusion_policy.common.action_utils import (
 )
 from reactive_diffusion_policy.common.space_utils import ortho6d_to_rotation_matrix, pose10d_to_mat, mat_to_pose
 
-# # === GNN tactile encoder imports ===
-# from tacdex3d.pretraining.models.edcoder import PreModel
-# from tacdex3d.robomimic.models.utils import data_to_gnn_batch
-# from tacdex3d.diffusion_policy.real_world.fk.constants import (
-#     XELA_USPA44_COORD, XELA_TACTILE_ORI_COORD
-# )
-# from scipy.spatial.transform import Rotation as R
+# Attention 가중치를 저장할 글로벌 변수 #09/09
+attention_maps = list()
 
-# # ---- forward_kinematics (dataset 코드와 동일 동작) ----
-# def _forward_kinematics_points():
-#     # 센서 포즈 고정(Identity) 가정: base 좌표계에서 taxel 기준점
-#     link_pose = np.eye(4)
-#     rotation = link_pose[:3, :3]
-#     translation = link_pose[:3, 3]
-#     local_points = XELA_TACTILE_ORI_COORD + XELA_USPA44_COORD  # (16,3)
-#     real_points = (rotation @ local_points.T).T + translation   # (16,3)
-#     # 각도는 안 씀(좌표만 사용). 필요하면 아래 3개 라인 주석 해제
-#     # real_angle = R.from_matrix(rotation).as_euler("xyz").reshape(1,3) / np.pi
-#     # real_points = np.concatenate([real_points, np.repeat(real_angle, len(XELA_USPA44_COORD), axis=0)], axis=1)  # (16,6)
-#     return real_points  # (16,3)
+# Hook 함수 정의
+def get_attention_map(name):
+    def hook(model, input, output):
+        # output[0]는 어텐션 가중치 텐서일 수 있습니다. 모델 구조에 따라 다름
+        # 보통 (batch_size, num_heads, sequence_length, sequence_length) 형태
+        attention_maps.append(output.detach().cpu())
+    return hook
 
-# class TactileGraphEncoder:
-#     """
-#     obs['tcp_wrench'] --> (T,256) 임베딩
-#     - ckpt는 PreModel.encoder 가중치
-#     - stats_path에는 {'mean': (3,), 'std': (3,)} 저장되어 있어야 함
-#     """
-#     def __init__(self, ckpt_path: str, stats_path: str, device: str = "cpu"):
-#         # === PreModel encoder 구성 (학습 때와 같은 하이퍼파라미터) ===
-#         self.device = torch.device(device)
-#         num_heads = 4
-#         num_out_heads = 1
-#         num_hidden = 16
-#         num_layers = 3
-#         residual = False
-#         attn_drop = 0.0
-#         in_drop = 0.0
-#         norm = None
-#         negative_slope = 0.2
-#         encoder_type = "gat"
-#         decoder_type = "gat"
-#         mask_rate = 0.01
-#         drop_edge_rate = 0.0
-#         replace_rate = 0.0
-#         activation = "prelu"
-#         loss_fn = "mse"
-#         alpha_l = 3
-#         concat_hidden = False
-#         mask_index = 0
-#         resultant_type = None
-
-#         full_model = PreModel(
-#             in_dim=6, num_hidden=num_hidden, num_layers=num_layers,
-#             nhead=num_heads, nhead_out=num_out_heads, activation=activation,
-#             feat_drop=in_drop, attn_drop=attn_drop, negative_slope=negative_slope,
-#             residual=residual, encoder_type=encoder_type, decoder_type=decoder_type,
-#             mask_rate=mask_rate, norm=norm, loss_fn=loss_fn,
-#             drop_edge_rate=drop_edge_rate, replace_rate=replace_rate,
-#             alpha_l=alpha_l, concat_hidden=concat_hidden, mask_index=mask_index,
-#             resultant_type=resultant_type, num_nodes=16
-#         )
-#         full_model.eval()
-#         self.encoder = full_model.encoder.to(self.device)
-
-#         state_dict = torch.load(ckpt_path, map_location="cpu")
-#         self.encoder.nets.load_state_dict(state_dict)
-#         for p in self.encoder.parameters():
-#             p.requires_grad = False
-#         self.encoder.eval()
-
-#         stats = np.load(stats_path, allow_pickle=True).item()
-#         self.mean = stats["mean"].astype(np.float32)  # (3,)
-#         self.std  = stats["std"].astype(np.float32)   # (3,)
-
-#         # (16,3) taxel 위치(베이스 좌표계). 시간축에 반복해서 붙여 씀
-#         self.taxel_xyz = _forward_kinematics_points().astype(np.float32)
-
-#     def _to_T_16_3(self, wrench: np.ndarray) -> np.ndarray:
-#         x = np.asarray(wrench, dtype=np.float32)
-#         if x.ndim == 1:
-#             # (48,) -> (1,16,3)
-#             if x.shape[0] != 48:
-#                 raise ValueError(f"tcp_wrench shape {x.shape} not understood")
-#             x = x.reshape(1, 16, 3)
-#         elif x.ndim == 2:
-#             # (T,48) or (T,16*3)
-#             if x.shape[1] == 48:
-#                 x = x.reshape(-1, 16, 3)
-#             elif x.shape[1] == 16 and x.shape[0] == 3:
-#                 # (3,16) 잘못된 축일 수 있음
-#                 raise ValueError("tcp_wrench appears transposed (3,16). Expect (T,48) or (T,16,3).")
-#             elif x.shape[1] == 16 and x.shape[0] > 3:
-#                 # (T,16)인 경우 축이 유실됨
-#                 raise ValueError("tcp_wrench missing 3-axis dimension; need (T,16,3) or (T,48).")
-#             else:
-#                 # (T,16,3)? 그럼 이미 맞음 (ndim=3이어야 하는데 2가 들어온 케이스 방지)
-#                 pass
-#         elif x.ndim == 3:
-#             if x.shape[1:] != (16, 3):
-#                 raise ValueError(f"tcp_wrench (T,16,3) expected, got {x.shape}")
-#         else:
-#             raise ValueError(f"tcp_wrench ndim {x.ndim} not supported")
-#         return x
-
-#     def encode(self, wrench: np.ndarray) -> np.ndarray:
-#         """
-#         입력: wrench (T,48) or (T,16,3) or (48,)
-#         출력: (T,256) latent
-#         """
-#         f = self._to_T_16_3(wrench)                         # (T,16,3)
-#         f_norm = (f - self.mean[None, None, :]) / (self.std[None, None, :] + 1e-8)
-#         Tn = f_norm.shape[0]
-#         xyz = np.repeat(self.taxel_xyz[None, :, :], Tn, axis=0)  # (T,16,3)
-#         nodes = np.concatenate([xyz, f_norm], axis=2)            # (T,16,6)
-
-#         batch, _, _, _ = data_to_gnn_batch(nodes, edge_type='four+sensor')
-#         batch = batch.to(self.device)
-
-#         with torch.no_grad():
-#             x = self.encoder(batch.x, batch.edge_index)   # (#nodes_total, hidden=16)
-#         # 그래프당 16 노드 -> (T,16,16)로 복원 후 flatten
-#         latent = x.view(-1, 16, 16).reshape(-1, 16*16).cpu().numpy().astype(np.float32)  # (T,256)
-#         return latent
-
-#     @staticmethod
-#     def sum_over_taxels(wrench: np.ndarray) -> np.ndarray:
-#         """
-#         (선택) AT용 extended_obs 규격이 합력(3)일 때 사용
-#         입력: (T,48) or (T,16,3) or (48,)
-#         출력: (T,3)
-#         """
-#         x = np.asarray(wrench, dtype=np.float32)
-#         if x.ndim == 1:
-#             x = x.reshape(1, 16, 3)
-#         elif x.ndim == 2 and x.shape[1] == 48:
-#             x = x.reshape(-1, 16, 3)
-#         elif x.ndim == 3 and x.shape[1:] == (16, 3):
-#             pass
-#         else:
-#             raise ValueError(f"Unexpected tcp_wrench shape {x.shape}")
-#         return x.sum(axis=1)  # (T,3)
-
-
-    
 def solve_table_collision(ee_pose, gripper_width, height_threshold):    # robot의 EE와 table간 충돌 방지 height_threshold는 table의 높이로 해당 높이보다 내려가지 않도록 함 
     finger_thickness = 25.5 / 1000
     keypoints = list()  # keypoints: 그리퍼의 4꼭지점
@@ -349,9 +216,9 @@ def at_worker(env, policy, latent_q, stop_event,
     while not stop_event.is_set():
         try:
             latent = latent_q.get(timeout=0.02)   # (D_latent + meta)
-            logger.debug(f"Received latent with shape: {latent.shape}")
+            # logger.debug(f"Received latent with shape: {latent.shape}")
         except queue.Empty:
-            logger.debug("No latent received, continuing...")
+            # logger.debug("No latent received, continuing...")
             time.sleep(max(0,next_call-time.time()))
             next_call += dt
             continue
@@ -374,14 +241,13 @@ def at_worker(env, policy, latent_q, stop_event,
         ext_obs_np = get_real_obs_dict_rdp(ext_obs,
                             shape_meta=shape_meta, is_extended_obs=True)
         
-        for k in list(ext_obs_np.keys()):   # 3dtacdex3d
-            if k.endswith('tcp_wrench') or k == 'tcp_wrench':
-                # 학습과 동일하게 합력(3) 사용
-                logger.info(f"Processing {k} with shape: {ext_obs_np[k].shape}")   # (2,48)
-                logger.debug(f"tcp_wrench shape before processing: {ext_obs_np[k]}")  # (2,48)
-                # ext_obs_np[k] = TactileGraphEncoder.sum_over_taxels(ext_obs_np[k])  # (T,3)
-                logger.info(f"Processed {k} to shape: {ext_obs_np[k].shape}")  # (2,3)
-                logger.debug(f"tcp_wrench shape after processing: {ext_obs_np[k]}")  # (2,3)
+        # for k in list(ext_obs_np.keys()):   # 3dtacdex3d
+        #     if k.endswith('tcp_wrench') or k == 'tcp_wrench':
+        #         # 학습과 동일하게 합력(3) 사용
+        #         logger.info(f"Processing {k} with shape: {ext_obs_np[k].shape}")   # (2,48)
+        #         logger.debug(f"tcp_wrench shape before processing: {ext_obs_np[k]}")  # (2,48)
+        #         logger.info(f"Processed {k} to shape: {ext_obs_np[k].shape}")  # (2,3)
+        #         logger.debug(f"tcp_wrench shape after processing: {ext_obs_np[k]}")  # (2,3)
 
         ext_obs_t = dict_apply(ext_obs_np,
                                lambda x: torch.from_numpy(x.astype(np.float32)).unsqueeze(0).to(device))
@@ -406,7 +272,7 @@ def at_worker(env, policy, latent_q, stop_event,
                         temporal_downsample_ratio,
                         extend_obs_pad_after=True)['action'][0].cpu().numpy()
 
-        logger.debug(f"delta shape: {delta.shape}") # (27,10)
+        # logger.debug(f"delta shape: {delta.shape}") # (27,10)
 
         # delta_tcp = delta[:,:action_dim]  # TCP pose delta
         # delta_gripper = delta[:,action_dim:]  # gripper width delta
@@ -416,7 +282,7 @@ def at_worker(env, policy, latent_q, stop_event,
         # logger.debug(f"delta_horizon shape: {delta_horizon.shape}") 
         abs_action = relative_actions_to_absolute_actions(delta_horizon, abs_pose)
 
-        logger.debug(f"abs_action shape: {abs_action.shape}")   # (action horizon,10)
+        # logger.debug(f"abs_action shape: {abs_action.shape}")   # (action horizon,10)
         tcp_abs_action = abs_action[:,:action_dim]
         gripper_abs_action = abs_action[:,action_dim:]
         left_action_batch = pose10d_to_mat(tcp_abs_action)
@@ -436,17 +302,17 @@ def at_worker(env, policy, latent_q, stop_event,
         action_exec_latency = 0.01
         curr_time = time.time()
         is_new = action_timestamps > (curr_time + action_exec_latency)
-        logger.debug(f"len of combined_action: {len(combined_action)}") # action horizon
-        logger.debug(f"len of action_timestamps: {len(action_timestamps)}") # action horizon
+        # logger.debug(f"len of combined_action: {len(combined_action)}") # action horizon
+        # logger.debug(f"len of action_timestamps: {len(action_timestamps)}") # action horizon
         # timestamp = np.array([time.time()+control_dt])
 
         if np.sum(is_new) == 0:
             combined_action = combined_action[[-1]]
-            logger.debug(f"No new actions, using last action: {combined_action}")
+            # logger.debug(f"No new actions, using last action: {combined_action}")
         else:
             combined_action = combined_action[is_new]
             action_timestamps = action_timestamps[is_new]
-            logger.info(f"New actions: {len(combined_action)}")
+            # logger.info(f"New actions: {len(combined_action)}")
         # ---- 5) 실제 로봇에 전송 ----
         # only 2 step shoot 08/13
         # combined_action = combined_action[:3]
@@ -454,7 +320,7 @@ def at_worker(env, policy, latent_q, stop_event,
         # original action
         env.rdp_exec_actions(combined_action, action_timestamps, compensate_latency=True)
         # env.rdp_exec_actions(combined_action, action_timestamps, compensate_latency=False)
-        logger.debug(f"submit {len(combined_action)}")
+        # logger.debug(f"submit {len(combined_action)}")
 
         # combined_last_action = combined_action[-1]  # 마지막 액션만 전송
         # last_action_timestamps = action_timestamps[-1]  # 마지막 액션의 타임스탬프
@@ -667,7 +533,19 @@ def main(input, output, robot_config,
 
             device = torch.device('cuda')
             policy.eval().to(device)
-
+            # attention map 시각화 09/09
+            print("Attributes of policy.obs_encoder:")
+            print(dir(policy.obs_encoder))
+            try:
+                # ViT 모델의 마지막 어텐션 레이어에 접근 (이 경로는 모델에 따라 다를 수 있음)
+                left_camera_model = policy.obs_encoder.key_model_map['camera0']
+                # last_attention_layer = policy.obs_encoder.model.blocks[-1].attn.attn_drop
+                last_attention_layer = left_camera_model.blocks[-1].attn.attn_drop
+                last_attention_layer.register_forward_hook(get_attention_map("last_attention"))
+                print("Successfully registered hook to the last attention layer of camera0.")
+            except AttributeError as e:
+                print(f"Could not register hook. Model structure might be different: {e}")
+            
             print("Warming up policy inference")
             print("Camera ready:", env.camera.is_ready) # check camera is ready
             print("Robot ready:", env.robot.is_ready)   # frankainterpolationcontroller 제어 루프가 한번 성공적으로 돌거나 모든 작업이 종료했을 때 ready
@@ -897,19 +775,19 @@ def main(input, output, robot_config,
                                                     action_all, # shape(num_timesteps, latent_dim)
                                                     base_absolute_action[np.newaxis, :].repeat(action_all.shape[0], axis=0) # base_absolute_action을 action_all.shape[0](num_timesteps) 만큼 복제 -> shape(num_timesteps, left_tcp_pose_dim + right_tcp_pose_dim)
                                                 ], axis=-1)
-                            logger.info(f"action all shape: {action_all.shape}, action all: {action_all}")
+                            # logger.info(f"action all shape: {action_all.shape}, action all: {action_all}")
                             action_all = np.concatenate([  # action이 n_obs_steps 이후 timestep에 대응되므로, 이에 맞는 time index 부여 -> action all shape : [num_timestpes, latent_dim + left_tcp_pose_dim + right_tcp_pose_dim + num_timestep(1)]
                                                 action_all,
                                                 np.arange(policy.n_obs_steps * temporal_downsample_ratio, action_all.shape[0] + policy.n_obs_steps * temporal_downsample_ratio)[:, np.newaxis]    #(2, num_timesteps + 2)[:,np.newaxis] -> shape (num_timesteps,1)
                                             ], axis=-1) # 07/30
-                            logger.info(f"action all shape after time index: {action_all.shape}, action all: {action_all}")
+                            # logger.info(f"action all shape after time index: {action_all.shape}, action all: {action_all}")
                             # action_timestamps = (np.arange(len(action_all), dtype=np.float64)
                             action_timestamps = (np.arange(action_all.shape[0], dtype=np.float64)
                                 ) * dt + obs_timestamps[-1]
                             # for k, z in enumerate(action_all):
                             #     z_full = np.concatenate([z, [action_timestamps[k]]], axis=0)
                             #     latent_q.put(z_full)
-                            logger.debug(f"action_all shape: {action_all.shape}, action_all len: {len(action_all)}")
+                            # logger.debug(f"action_all shape: {action_all.shape}, action_all len: {len(action_all)}")
                             for k, z in enumerate(action_all):
                                 # logger.info(f"rdp inference action {k}: {z}")
                                 z_full = np.concatenate([z, [action_timestamps[k]]], axis=0)
@@ -932,6 +810,36 @@ def main(input, output, robot_config,
                             thickness=1,
                             color=(255,255,255)
                         )
+
+                        # attention map 시각화 09/09
+                        if attention_maps:
+                            # 가장 최근의 attention map 가져오기
+                            att_mat = torch.stack(attention_maps).squeeze(0)
+                            attention_maps.clear() # 리스트 비우기
+
+                            # CLS 토큰을 제외하고, 평균 어텐션 가중치 계산
+                            att_mat = att_mat.mean(dim=1)[:, 1:, 1:] # 헤드 평균, CLS 토큰 제외
+
+                            # 이미지 크기에 맞게 리사이즈
+                            h, w = obs_left_img.shape[:2]
+                            # ViT는 이미지를 패치 단위로 처리하므로 패치 수에 맞는 그리드 크기를 계산해야 합니다.
+                            num_patches = att_mat.shape[-1]
+                            grid_size = int(num_patches**0.5)
+
+                            att_mat = att_mat.reshape(-1, grid_size, grid_size)
+                            att_mat = F.interpolate(att_mat.unsqueeze(0), scale_factor=(h/grid_size, w/grid_size), mode='bilinear', align_corners=False).squeeze(0).cpu().numpy()
+
+                            # 시각화를 위해 Normalize
+                            att_mat = (att_mat - att_mat.min()) / (att_mat.max() - att_mat.min())
+
+                            # Colormap 적용
+                            heatmap = cv2.applyColorMap(np.uint8(255 * att_mat[0]), cv2.COLORMAP_JET)
+                            heatmap = np.float32(heatmap) / 255
+
+                            # 원본 이미지와 합치기
+                            vis_img_with_att = (heatmap * 0.5 + np.float32(obs_left_img) * 0.5)
+
+                            cv2.imshow('Attention Map', vis_img_with_att)
                         cv2.imshow('default', vis_img[...,::-1])
 
                         # _ = cv2.pollKey()
